@@ -337,7 +337,7 @@ class PloomyDaemon {
       `${issue.number}.review.txt`
     );
 
-    const repoDir = join(this.config.workDir, issue.owner, issue.repo);
+    const repoDir = await this.planReviewer.ensureRepoClone(issue);
 
     const result = await this.planReviewer.reviewPlan(
       task.draftPlanPath,
