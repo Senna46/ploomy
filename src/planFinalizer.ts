@@ -53,18 +53,7 @@ export class PlanFinalizer {
     context: ConversationContext,
     outputPath: string
   ): Promise<FinalizingResult> {
-    const repoDir = join(
-      this.config.workDir,
-      context.issue.owner,
-      context.issue.repo
-    );
-
-    if (existsSync(join(repoDir, ".git"))) {
-      await execFileAsync("git", ["fetch", "--all", "--prune"], {
-        cwd: repoDir,
-        timeout: 2 * 60 * 1000,
-      });
-    }
+    const repoDir = await this.ensureRepoClone(context.issue);
 
     const prompt = this.buildFinalizationPrompt(context);
     const output = await this.runClaude(repoDir, prompt);
@@ -202,6 +191,45 @@ export class PlanFinalizer {
       questions: null,
       planContent: text.trim(),
     };
+  }
+
+  // ============================================================
+  // Repository cloning
+  // ============================================================
+
+  private async ensureRepoClone(issue: {
+    owner: string;
+    repo: string;
+  }): Promise<string> {
+    mkdirSync(this.config.workDir, { recursive: true });
+
+    const repoDir = join(this.config.workDir, issue.owner, issue.repo);
+
+    if (existsSync(join(repoDir, ".git"))) {
+      logger.debug("Fetching latest for existing clone.", { repoDir });
+      await execFileAsync("git", ["fetch", "--all", "--prune"], {
+        cwd: repoDir,
+        timeout: 2 * 60 * 1000,
+      });
+    } else {
+      logger.info("Cloning repository.", {
+        owner: issue.owner,
+        repo: issue.repo,
+        repoDir,
+      });
+      mkdirSync(join(this.config.workDir, issue.owner), { recursive: true });
+      const cloneUrl = `https://github.com/${issue.owner}/${issue.repo}.git`;
+      await execFileAsync(
+        "git",
+        ["clone", cloneUrl, join(issue.owner, issue.repo)],
+        {
+          cwd: this.config.workDir,
+          timeout: 2 * 60 * 1000,
+        }
+      );
+    }
+
+    return repoDir;
   }
 
   // ============================================================
