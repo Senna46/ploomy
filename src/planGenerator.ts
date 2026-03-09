@@ -473,9 +473,6 @@ export async function runClaude(
 
     child.stdout.on("data", (data: Buffer) => {
       stdout += data.toString();
-      if (stdout.length > MAX_STDOUT_SIZE) {
-        stdout = stdout.substring(stdout.length - MAX_STDOUT_SIZE);
-      }
     });
 
     child.stderr.on("data", (data: Buffer) => {
@@ -502,6 +499,9 @@ export async function runClaude(
           )
         );
         return;
+      }
+      if (stdout.length > MAX_STDOUT_SIZE) {
+        stdout = truncatePreservingMarkers(stdout);
       }
       resolve(stdout);
     });
@@ -642,4 +642,26 @@ export function extractSearchableText(claudeOutput: string): string {
   }
 
   return trimmed;
+}
+
+// ============================================================
+// Utility: truncate large stdout while preserving output markers
+// ============================================================
+
+const OUTPUT_MARKERS = ["PLAN_CONTENT:", "QUESTIONS:", "READY"];
+
+function truncatePreservingMarkers(output: string): string {
+  let earliestMarkerIndex = -1;
+  for (const marker of OUTPUT_MARKERS) {
+    const idx = output.lastIndexOf(marker);
+    if (idx !== -1 && (earliestMarkerIndex === -1 || idx < earliestMarkerIndex)) {
+      earliestMarkerIndex = idx;
+    }
+  }
+
+  if (earliestMarkerIndex !== -1) {
+    return output.substring(earliestMarkerIndex);
+  }
+
+  return output.substring(output.length - MAX_STDOUT_SIZE);
 }
