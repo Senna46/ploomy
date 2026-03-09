@@ -4,6 +4,8 @@
 // which Issues need processing based on their current state.
 // Limitations: Relies on polling; does not use webhooks.
 
+import { existsSync } from "fs";
+
 import { GitHubClient } from "./githubClient.js";
 import { findNewHumanComments } from "./issueParser.js";
 import { logger } from "./logger.js";
@@ -112,9 +114,9 @@ export class IssueMonitor {
       this.state.clearErrorMessage(issueId);
 
       let resumeState: PlanState;
-      if (existingTask.reviewOutputPath) {
+      if (existingTask.reviewOutputPath && existsSync(existingTask.reviewOutputPath)) {
         resumeState = "FINALIZING";
-      } else if (existingTask.draftPlanPath) {
+      } else if (existingTask.draftPlanPath && existsSync(existingTask.draftPlanPath)) {
         resumeState = "REVIEWING";
       } else {
         resumeState = "PENDING";
