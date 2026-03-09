@@ -11,7 +11,6 @@ import { readFile, writeFile, unlink } from "fs/promises";
 import { join } from "path";
 
 import { logger } from "./logger.js";
-import { ensureRepoClone } from "./planGenerator.js";
 import type { Config, ReviewResult } from "./types.js";
 
 const CODEX_TIMEOUT_MS = 5 * 60 * 1000;
@@ -92,17 +91,6 @@ export class PlanReviewer {
   }
 
   // ============================================================
-  // Repository cloning (delegates to shared utility)
-  // ============================================================
-
-  async ensureRepoClone(issue: {
-    owner: string;
-    repo: string;
-  }): Promise<string> {
-    return ensureRepoClone(this.config.workDir, issue);
-  }
-
-  // ============================================================
   // Codex CLI execution
   // ============================================================
 
@@ -116,6 +104,10 @@ export class PlanReviewer {
       });
 
       let stderr = "";
+
+      child.stdout.on("data", () => {
+        // Drain stdout to prevent pipe buffer from filling and blocking the process
+      });
 
       const killTimer = setTimeout(() => {
         if (settled) return;
