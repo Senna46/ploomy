@@ -551,13 +551,59 @@ export async function ensureRepoClone(
         cwd: repoDir,
         timeout: 2 * 60 * 1000,
       });
-      // Update working tree to match remote HEAD so Claude explores current code
-      const { stdout: defaultRef } = await execFileAsync(
+      // Update origin/HEAD to match the remote's current default branch.
+      // This handles renamed default branches (e.g. master → main) whose
+      // stale refs were removed by fetch --prune.
+      await execFileAsync(
         "git",
-        ["symbolic-ref", "refs/remotes/origin/HEAD"],
+        ["remote", "set-head", "origin", "--auto"],
         { cwd: repoDir, timeout: 30_000 }
-      ).catch(() => ({ stdout: "" }));
-      const resetTarget = defaultRef.trim() || "origin/HEAD";
+      ).catch((err) => {
+        logger.warn("git remote set-head --auto failed, will try fallback.", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
+      // Read the (now-refreshed) symbolic ref for origin/HEAD
+      let resetTarget = "";
+      try {
+        const { stdout: defaultRef } = await execFileAsync(
+          "git",
+          ["symbolic-ref", "refs/remotes/origin/HEAD"],
+          { cwd: repoDir, timeout: 30_000 }
+        );
+        resetTarget = defaultRef.trim();
+      } catch {
+        // symbolic-ref failed; discover default branch via ls-remote
+        try {
+          const { stdout: lsRemote } = await execFileAsync(
+            "git",
+            [...authArgs, "ls-remote", "--symref", "origin", "HEAD"],
+            { cwd: repoDir, timeout: 30_000 }
+          );
+          const match = lsRemote.match(/ref:\s+refs\/heads\/(\S+)\s+HEAD/);
+          if (match) {
+            resetTarget = `origin/${match[1]}`;
+          }
+        } catch {
+          // last resort
+        }
+      }
+
+      if (!resetTarget) {
+        // Absolute fallback: use the first remote branch found
+        const { stdout: branchList } = await execFileAsync(
+          "git",
+          ["branch", "-r", "--list", "origin/*", "--sort=-committerdate"],
+          { cwd: repoDir, timeout: 30_000 }
+        );
+        const firstBranch = branchList
+          .split("\n")
+          .map((b) => b.trim())
+          .find((b) => b && !b.includes("->"));
+        resetTarget = firstBranch || "origin/main";
+      }
+
       await execFileAsync("git", ["reset", "--hard", resetTarget], {
         cwd: repoDir,
         timeout: 30_000,
