@@ -100,7 +100,7 @@ export class IssueMonitor {
       return null;
     }
 
-    // Failed tasks: reset to PENDING for retry if under limit
+    // Failed tasks: resume from the latest phase with completed artifacts
     if (existingTask.state === "FAILED") {
       if (existingTask.retryCount >= MAX_RETRY_COUNT) {
         logger.warn(
@@ -110,7 +110,17 @@ export class IssueMonitor {
         return null;
       }
       this.state.clearErrorMessage(issueId);
-      this.state.updateState(issueId, "PENDING");
+
+      let resumeState: PlanState;
+      if (existingTask.reviewOutputPath) {
+        resumeState = "FINALIZING";
+      } else if (existingTask.draftPlanPath) {
+        resumeState = "REVIEWING";
+      } else {
+        resumeState = "PENDING";
+      }
+
+      this.state.updateState(issueId, resumeState);
       const updatedTask = this.state.getTask(issueId)!;
       return { issue, task: updatedTask, newComments: [] };
     }
