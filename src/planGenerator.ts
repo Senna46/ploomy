@@ -499,12 +499,28 @@ export async function ensureRepoClone(
   mkdirSync(workDir, { recursive: true });
 
   const repoDir = join(workDir, issue.owner, issue.repo);
+  const cloneUrl = await buildAuthenticatedCloneUrl(issue.owner, issue.repo);
 
   if (existsSync(join(repoDir, ".git"))) {
     logger.debug("Fetching latest for existing clone.", { repoDir });
+    await execFileAsync("git", ["remote", "set-url", "origin", cloneUrl], {
+      cwd: repoDir,
+      timeout: 30_000,
+    });
     await execFileAsync("git", ["fetch", "--all", "--prune"], {
       cwd: repoDir,
       timeout: 2 * 60 * 1000,
+    });
+    // Update working tree to match remote HEAD so Claude explores current code
+    const { stdout: defaultRef } = await execFileAsync(
+      "git",
+      ["symbolic-ref", "refs/remotes/origin/HEAD"],
+      { cwd: repoDir, timeout: 30_000 }
+    ).catch(() => ({ stdout: "" }));
+    const resetTarget = defaultRef.trim() || "origin/HEAD";
+    await execFileAsync("git", ["reset", "--hard", resetTarget], {
+      cwd: repoDir,
+      timeout: 30_000,
     });
   } else {
     logger.info("Cloning repository.", {
@@ -513,7 +529,6 @@ export async function ensureRepoClone(
       repoDir,
     });
     mkdirSync(join(workDir, issue.owner), { recursive: true });
-    const cloneUrl = `https://github.com/${issue.owner}/${issue.repo}.git`;
     await execFileAsync(
       "git",
       ["clone", cloneUrl, join(issue.owner, issue.repo)],
@@ -525,6 +540,28 @@ export async function ensureRepoClone(
   }
 
   return repoDir;
+}
+
+async function buildAuthenticatedCloneUrl(
+  owner: string,
+  repo: string
+): Promise<string> {
+  const envToken = process.env.GH_TOKEN?.trim();
+  if (envToken) {
+    return `https://x-access-token:${envToken}@github.com/${owner}/${repo}.git`;
+  }
+
+  try {
+    const { stdout } = await execFileAsync("gh", ["auth", "token"]);
+    const token = stdout.trim();
+    if (token) {
+      return `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+    }
+  } catch {
+    logger.debug("Could not obtain token from gh CLI for git clone URL.");
+  }
+
+  return `https://github.com/${owner}/${repo}.git`;
 }
 
 // ============================================================
