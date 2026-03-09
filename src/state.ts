@@ -43,6 +43,7 @@ export class StateStore {
         last_processed_human_comment_id INTEGER,
         review_output_path              TEXT,
         error_message                   TEXT,
+        retry_count                     INTEGER NOT NULL DEFAULT 0,
         created_at                      TEXT NOT NULL,
         updated_at                      TEXT NOT NULL
       );
@@ -53,6 +54,13 @@ export class StateStore {
       CREATE INDEX IF NOT EXISTS idx_issue_tasks_repo
         ON issue_tasks (repo);
     `);
+
+    // Migration: add retry_count column to existing databases
+    try {
+      this.db.exec("ALTER TABLE issue_tasks ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0");
+    } catch {
+      // Column already exists
+    }
   }
 
   // ============================================================
@@ -65,30 +73,6 @@ export class StateStore {
       .get(issueId) as IssueTaskRow | undefined;
 
     return row ? rowToTask(row) : null;
-  }
-
-  getTasksByState(state: PlanState): IssueTask[] {
-    const rows = this.db
-      .prepare("SELECT * FROM issue_tasks WHERE state = ?")
-      .all(state) as IssueTaskRow[];
-
-    return rows.map(rowToTask);
-  }
-
-  getTasksByRepo(repo: string): IssueTask[] {
-    const rows = this.db
-      .prepare("SELECT * FROM issue_tasks WHERE repo = ?")
-      .all(repo) as IssueTaskRow[];
-
-    return rows.map(rowToTask);
-  }
-
-  getAllActiveTasks(): IssueTask[] {
-    const rows = this.db
-      .prepare("SELECT * FROM issue_tasks WHERE state NOT IN ('DONE')")
-      .all() as IssueTaskRow[];
-
-    return rows.map(rowToTask);
   }
 
   // ============================================================
@@ -140,11 +124,19 @@ export class StateStore {
   ): void {
     const now = new Date().toISOString();
 
-    this.db
-      .prepare(
-        "UPDATE issue_tasks SET state = ?, error_message = ?, updated_at = ? WHERE issue_id = ?"
-      )
-      .run(newState, errorMessage, now, issueId);
+    if (newState === "FAILED") {
+      this.db
+        .prepare(
+          "UPDATE issue_tasks SET state = ?, error_message = ?, retry_count = retry_count + 1, updated_at = ? WHERE issue_id = ?"
+        )
+        .run(newState, errorMessage, now, issueId);
+    } else {
+      this.db
+        .prepare(
+          "UPDATE issue_tasks SET state = ?, error_message = ?, updated_at = ? WHERE issue_id = ?"
+        )
+        .run(newState, errorMessage, now, issueId);
+    }
 
     logger.debug("Updated task state with error.", {
       issueId,
@@ -246,6 +238,7 @@ interface IssueTaskRow {
   last_processed_human_comment_id: number | null;
   review_output_path: string | null;
   error_message: string | null;
+  retry_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -265,6 +258,7 @@ function rowToTask(row: IssueTaskRow): IssueTask {
     lastProcessedHumanCommentId: row.last_processed_human_comment_id,
     reviewOutputPath: row.review_output_path,
     errorMessage: row.error_message,
+    retryCount: row.retry_count,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

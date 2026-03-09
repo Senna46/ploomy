@@ -531,7 +531,7 @@ export class PlanGenerator {
 // Utility: extract searchable text from claude -p output
 // ============================================================
 
-function extractSearchableText(claudeOutput: string): string {
+export function extractSearchableText(claudeOutput: string): string {
   const trimmed = claudeOutput.trim();
 
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {

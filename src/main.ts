@@ -35,8 +35,6 @@ import type {
   PlanState,
 } from "./types.js";
 
-const MAX_RETRY_COUNT = 3;
-
 class PloomyDaemon {
   private config: Config;
   private state: StateStore;
@@ -456,7 +454,10 @@ class PloomyDaemon {
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => {
-      const timer = setTimeout(resolve, ms);
+      const timer = setTimeout(() => {
+        clearInterval(checkShutdown);
+        resolve();
+      }, ms);
       const checkShutdown = setInterval(() => {
         if (this.isShuttingDown) {
           clearTimeout(timer);

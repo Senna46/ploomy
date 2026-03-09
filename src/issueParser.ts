@@ -11,17 +11,6 @@ export function isBotComment(comment: IssueComment): boolean {
   return comment.body.includes(PLOOMY_COMMENT_MARKER);
 }
 
-export function findLatestBotComment(
-  comments: IssueComment[]
-): IssueComment | null {
-  for (let i = comments.length - 1; i >= 0; i--) {
-    if (isBotComment(comments[i])) {
-      return comments[i];
-    }
-  }
-  return null;
-}
-
 export function findNewHumanComments(
   comments: IssueComment[],
   afterCommentId: number | null

@@ -12,6 +12,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 
 import { logger } from "./logger.js";
+import { extractSearchableText } from "./planGenerator.js";
 import type {
   Config,
   ConversationContext,
@@ -290,37 +291,3 @@ export class PlanFinalizer {
   }
 }
 
-// ============================================================
-// Utility: extract searchable text from claude -p output
-// ============================================================
-
-function extractSearchableText(claudeOutput: string): string {
-  const trimmed = claudeOutput.trim();
-
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (typeof parsed.result === "string") {
-        return parsed.result;
-      }
-    } catch {
-      // fall through
-    }
-  }
-
-  const jsonLines = trimmed.split("\n");
-  for (let i = jsonLines.length - 1; i >= 0; i--) {
-    const line = jsonLines[i].trim();
-    if (!line.startsWith("{")) continue;
-    try {
-      const parsed = JSON.parse(line);
-      if (typeof parsed.result === "string") {
-        return parsed.result;
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return claudeOutput;
-}

@@ -56,6 +56,7 @@ export interface IssueTask {
   lastProcessedHumanCommentId: number | null;
   reviewOutputPath: string | null;
   errorMessage: string | null;
+  retryCount: number;
   createdAt: string;
   updatedAt: string;
 }

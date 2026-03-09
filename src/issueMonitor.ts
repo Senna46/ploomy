@@ -16,6 +16,8 @@ import type {
   PlanState,
 } from "./types.js";
 
+const MAX_RETRY_COUNT = 3;
+
 export class IssueMonitor {
   private github: GitHubClient;
   private state: StateStore;
@@ -98,8 +100,15 @@ export class IssueMonitor {
       return null;
     }
 
-    // Failed tasks: reset to PENDING for retry
+    // Failed tasks: reset to PENDING for retry if under limit
     if (existingTask.state === "FAILED") {
+      if (existingTask.retryCount >= MAX_RETRY_COUNT) {
+        logger.warn(
+          `Issue ${issueId} exceeded max retry count (${MAX_RETRY_COUNT}). Skipping.`,
+          { issueId, retryCount: existingTask.retryCount }
+        );
+        return null;
+      }
       this.state.updateState(issueId, "PENDING");
       const updatedTask = this.state.getTask(issueId)!;
       return { issue, task: updatedTask, newComments: [] };
