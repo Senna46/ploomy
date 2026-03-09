@@ -278,7 +278,10 @@ class PloomyDaemon {
       );
     } else {
       this.state.updateState(task.issueId, "DRAFTING");
-      await this.handleDrafting(item);
+      await this.handleDrafting({
+        ...item,
+        task: this.state.getTask(task.issueId)!,
+      });
     }
   }
 

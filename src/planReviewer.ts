@@ -5,16 +5,14 @@
 // Limitations: Codex CLI must be installed and authenticated.
 //   5-minute timeout. Review failure transitions to FAILED for retry.
 
-import { spawn, execFile } from "child_process";
-import { existsSync, mkdirSync } from "fs";
+import { spawn } from "child_process";
+import { mkdirSync } from "fs";
 import { readFile, writeFile, unlink } from "fs/promises";
 import { join } from "path";
-import { promisify } from "util";
 
 import { logger } from "./logger.js";
+import { ensureRepoClone } from "./planGenerator.js";
 import type { Config, ReviewResult } from "./types.js";
-
-const execFileAsync = promisify(execFile);
 
 const CODEX_TIMEOUT_MS = 5 * 60 * 1000;
 const SIGKILL_GRACE_MS = 5_000;
@@ -94,42 +92,14 @@ export class PlanReviewer {
   }
 
   // ============================================================
-  // Repository cloning
+  // Repository cloning (delegates to shared utility)
   // ============================================================
 
   async ensureRepoClone(issue: {
     owner: string;
     repo: string;
   }): Promise<string> {
-    mkdirSync(this.config.workDir, { recursive: true });
-
-    const repoDir = join(this.config.workDir, issue.owner, issue.repo);
-
-    if (existsSync(join(repoDir, ".git"))) {
-      logger.debug("Fetching latest for existing clone.", { repoDir });
-      await execFileAsync("git", ["fetch", "--all", "--prune"], {
-        cwd: repoDir,
-        timeout: 2 * 60 * 1000,
-      });
-    } else {
-      logger.info("Cloning repository.", {
-        owner: issue.owner,
-        repo: issue.repo,
-        repoDir,
-      });
-      mkdirSync(join(this.config.workDir, issue.owner), { recursive: true });
-      const cloneUrl = `https://github.com/${issue.owner}/${issue.repo}.git`;
-      await execFileAsync(
-        "git",
-        ["clone", cloneUrl, join(issue.owner, issue.repo)],
-        {
-          cwd: this.config.workDir,
-          timeout: 2 * 60 * 1000,
-        }
-      );
-    }
-
-    return repoDir;
+    return ensureRepoClone(this.config.workDir, issue);
   }
 
   // ============================================================

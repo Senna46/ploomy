@@ -57,7 +57,7 @@ export class PlanGenerator {
   async runQuestioning(
     context: ConversationContext
   ): Promise<QuestioningResult> {
-    const repoDir = await this.ensureRepoClone(context.issue);
+    const repoDir = await ensureRepoClone(this.config.workDir, context.issue);
     const projectDocs = await this.getProjectDocumentation(repoDir);
     const projectStructure = await this.getProjectStructure(repoDir);
 
@@ -79,7 +79,7 @@ export class PlanGenerator {
     context: ConversationContext,
     outputPath: string
   ): Promise<DraftingResult> {
-    const repoDir = await this.ensureRepoClone(context.issue);
+    const repoDir = await ensureRepoClone(this.config.workDir, context.issue);
     const projectDocs = await this.getProjectDocumentation(repoDir);
     const projectStructure = await this.getProjectStructure(repoDir);
 
@@ -417,45 +417,6 @@ export class PlanGenerator {
   }
 
   // ============================================================
-  // Repository cloning
-  // ============================================================
-
-  private async ensureRepoClone(issue: {
-    owner: string;
-    repo: string;
-  }): Promise<string> {
-    mkdirSync(this.config.workDir, { recursive: true });
-
-    const repoDir = join(this.config.workDir, issue.owner, issue.repo);
-
-    if (existsSync(join(repoDir, ".git"))) {
-      logger.debug("Fetching latest for existing clone.", { repoDir });
-      await execFileAsync("git", ["fetch", "--all", "--prune"], {
-        cwd: repoDir,
-        timeout: 2 * 60 * 1000,
-      });
-    } else {
-      logger.info("Cloning repository.", {
-        owner: issue.owner,
-        repo: issue.repo,
-        repoDir,
-      });
-      mkdirSync(join(this.config.workDir, issue.owner), { recursive: true });
-      const cloneUrl = `https://github.com/${issue.owner}/${issue.repo}.git`;
-      await execFileAsync(
-        "git",
-        ["clone", cloneUrl, join(issue.owner, issue.repo)],
-        {
-          cwd: this.config.workDir,
-          timeout: 2 * 60 * 1000,
-        }
-      );
-    }
-
-    return repoDir;
-  }
-
-  // ============================================================
   // Project context helpers
   // ============================================================
 
@@ -525,6 +486,45 @@ export class PlanGenerator {
 
     return sections.join("\n\n");
   }
+}
+
+// ============================================================
+// Shared utility: ensure repository clone exists and is up-to-date
+// ============================================================
+
+export async function ensureRepoClone(
+  workDir: string,
+  issue: { owner: string; repo: string }
+): Promise<string> {
+  mkdirSync(workDir, { recursive: true });
+
+  const repoDir = join(workDir, issue.owner, issue.repo);
+
+  if (existsSync(join(repoDir, ".git"))) {
+    logger.debug("Fetching latest for existing clone.", { repoDir });
+    await execFileAsync("git", ["fetch", "--all", "--prune"], {
+      cwd: repoDir,
+      timeout: 2 * 60 * 1000,
+    });
+  } else {
+    logger.info("Cloning repository.", {
+      owner: issue.owner,
+      repo: issue.repo,
+      repoDir,
+    });
+    mkdirSync(join(workDir, issue.owner), { recursive: true });
+    const cloneUrl = `https://github.com/${issue.owner}/${issue.repo}.git`;
+    await execFileAsync(
+      "git",
+      ["clone", cloneUrl, join(issue.owner, issue.repo)],
+      {
+        cwd: workDir,
+        timeout: 2 * 60 * 1000,
+      }
+    );
+  }
+
+  return repoDir;
 }
 
 // ============================================================
