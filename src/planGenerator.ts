@@ -293,7 +293,7 @@ export class PlanGenerator {
   private parseQuestioningOutput(output: string): QuestioningResult {
     const text = extractSearchableText(output);
 
-    const questionsMatch = text.match(/QUESTIONS:\s*\n([\s\S]+?)(?:\n\n|$)/);
+    const questionsMatch = text.match(/QUESTIONS:\s*\n([\s\S]+?)(?=\nREADY\s*$|\nPLAN_CONTENT:\s*\n|$)/s);
     if (questionsMatch) {
       return {
         hasQuestions: true,

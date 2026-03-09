@@ -175,7 +175,7 @@ export class PlanFinalizer {
   private parseFinalizationOutput(output: string): FinalizingResult {
     const text = extractSearchableText(output);
 
-    const questionsMatch = text.match(/QUESTIONS:\s*\n([\s\S]+?)(?:\n\n|$)/);
+    const questionsMatch = text.match(/QUESTIONS:\s*\n([\s\S]+?)(?=\nPLAN_CONTENT:\s*\n|$)/s);
     if (questionsMatch) {
       return {
         hasQuestions: true,
