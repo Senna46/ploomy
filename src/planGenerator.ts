@@ -157,7 +157,7 @@ export class PlanGenerator {
       );
     }
 
-    sections.push(this.formatConversationHistory(context));
+    sections.push(formatConversationHistory(context));
 
     sections.push(
       "## Output format\n\n" +
@@ -223,7 +223,7 @@ export class PlanGenerator {
       );
     }
 
-    sections.push(this.formatConversationHistory(context));
+    sections.push(formatConversationHistory(context));
 
     sections.push(
       "## Output format\n\n" +
@@ -251,14 +251,6 @@ export class PlanGenerator {
     );
 
     return sections.join("\n\n");
-  }
-
-  // ============================================================
-  // Conversation history formatter (delegates to shared function)
-  // ============================================================
-
-  private formatConversationHistory(context: ConversationContext): string {
-    return formatConversationHistory(context);
   }
 
   // ============================================================
@@ -500,10 +492,14 @@ export async function runClaude(
         );
         return;
       }
-      if (stdout.length > MAX_STDOUT_SIZE) {
-        stdout = truncatePreservingMarkers(stdout);
+      // Extract text from JSON before truncating so that marker search
+      // operates on the parsed result instead of raw JSON, avoiding
+      // false marker hits inside JSON string values.
+      let result = extractSearchableText(stdout);
+      if (result.length > MAX_STDOUT_SIZE) {
+        result = truncatePreservingMarkers(result);
       }
-      resolve(stdout);
+      resolve(result);
     });
 
     child.on("error", (error) => {
@@ -556,7 +552,7 @@ export async function ensureRepoClone(
       // stale refs were removed by fetch --prune.
       await execFileAsync(
         "git",
-        ["remote", "set-head", "origin", "--auto"],
+        [...authArgs, "remote", "set-head", "origin", "--auto"],
         { cwd: repoDir, timeout: 30_000 }
       ).catch((err) => {
         logger.warn("git remote set-head --auto failed, will try fallback.", {
