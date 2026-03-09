@@ -513,6 +513,12 @@ export async function runClaude(
       reject(new Error(`claude -p${logLabel} failed: ${error.message}`));
     });
 
+    child.stdin.on("error", (err) => {
+      logger.warn(`claude -p${logLabel} stdin error (EPIPE expected if process exited early).`, {
+        error: err.message,
+      });
+    });
+
     child.stdin.write(prompt);
     child.stdin.end();
   });

@@ -167,6 +167,12 @@ export class PlanReviewer {
         reject(new Error(`codex exec failed: ${error.message}`));
       });
 
+      child.stdin.on("error", (err) => {
+        logger.warn("codex exec stdin error (EPIPE expected if process exited early).", {
+          error: err.message,
+        });
+      });
+
       if (prompt) {
         child.stdin.write(prompt);
       }
