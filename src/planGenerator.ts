@@ -55,9 +55,10 @@ export class PlanGenerator {
   // ============================================================
 
   async runQuestioning(
-    context: ConversationContext
+    context: ConversationContext,
+    preClonedRepoDir?: string
   ): Promise<QuestioningResult> {
-    const repoDir = await ensureRepoClone(this.config.workDir, context.issue);
+    const repoDir = preClonedRepoDir ?? await ensureRepoClone(this.config.workDir, context.issue);
     const projectDocs = await this.getProjectDocumentation(repoDir);
     const projectStructure = await this.getProjectStructure(repoDir);
 
@@ -77,9 +78,10 @@ export class PlanGenerator {
 
   async runDrafting(
     context: ConversationContext,
-    outputPath: string
+    outputPath: string,
+    preClonedRepoDir?: string
   ): Promise<DraftingResult> {
-    const repoDir = await ensureRepoClone(this.config.workDir, context.issue);
+    const repoDir = preClonedRepoDir ?? await ensureRepoClone(this.config.workDir, context.issue);
     const projectDocs = await this.getProjectDocumentation(repoDir);
     const projectStructure = await this.getProjectStructure(repoDir);
 

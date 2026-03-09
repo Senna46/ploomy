@@ -33,9 +33,10 @@ export class PlanFinalizer {
 
   async runFinalization(
     context: ConversationContext,
-    outputPath: string
+    outputPath: string,
+    preClonedRepoDir?: string
   ): Promise<FinalizingResult> {
-    const repoDir = await ensureRepoClone(this.config.workDir, context.issue);
+    const repoDir = preClonedRepoDir ?? await ensureRepoClone(this.config.workDir, context.issue);
 
     const prompt = this.buildFinalizationPrompt(context);
     const output = await runClaude(repoDir, prompt, this.config.claudeModel, "finalization");

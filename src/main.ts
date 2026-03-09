@@ -24,7 +24,7 @@ import { IssueMonitor } from "./issueMonitor.js";
 import { logger, setLogLevel } from "./logger.js";
 import { PlanBranchManager } from "./planBranchManager.js";
 import { PlanFinalizer } from "./planFinalizer.js";
-import { PlanGenerator } from "./planGenerator.js";
+import { PlanGenerator, ensureRepoClone } from "./planGenerator.js";
 import { PlanReviewer } from "./planReviewer.js";
 import { StateStore } from "./state.js";
 import type {
@@ -212,22 +212,26 @@ class PloomyDaemon {
     });
 
     try {
+      // Clone/fetch the repo once per issue processing cycle instead of
+      // repeating it in every state handler.
+      const repoDir = await ensureRepoClone(this.config.workDir, issue);
+
       switch (task.state) {
         case "PENDING":
         case "QUESTIONING":
-          await this.handleQuestioning(item);
+          await this.handleQuestioning(item, repoDir);
           break;
 
         case "DRAFTING":
-          await this.handleDrafting(item);
+          await this.handleDrafting(item, repoDir);
           break;
 
         case "REVIEWING":
-          await this.handleReviewing(item);
+          await this.handleReviewing(item, repoDir);
           break;
 
         case "FINALIZING":
-          await this.handleFinalizing(item);
+          await this.handleFinalizing(item, repoDir);
           break;
 
         default:
@@ -248,7 +252,7 @@ class PloomyDaemon {
   // State handlers
   // ============================================================
 
-  private async handleQuestioning(item: ActionableIssue): Promise<void> {
+  private async handleQuestioning(item: ActionableIssue, repoDir: string): Promise<void> {
     const { issue, task } = item;
 
     this.state.updateState(task.issueId, "QUESTIONING");
@@ -266,7 +270,7 @@ class PloomyDaemon {
       reviewOutput: null,
     };
 
-    const result = await this.planGenerator.runQuestioning(context);
+    const result = await this.planGenerator.runQuestioning(context, repoDir);
 
     if (result.hasQuestions && result.questions) {
       await this.conversation.postQuestions(
@@ -280,11 +284,11 @@ class PloomyDaemon {
       await this.handleDrafting({
         ...item,
         task: this.state.getTask(task.issueId)!,
-      });
+      }, repoDir);
     }
   }
 
-  private async handleDrafting(item: ActionableIssue): Promise<void> {
+  private async handleDrafting(item: ActionableIssue, repoDir: string): Promise<void> {
     const { issue, task } = item;
 
     this.state.updateState(task.issueId, "DRAFTING");
@@ -307,7 +311,7 @@ class PloomyDaemon {
       await this.handleReviewing({
         ...item,
         task: this.state.getTask(task.issueId)!,
-      });
+      }, repoDir);
       return;
     }
 
@@ -324,7 +328,7 @@ class PloomyDaemon {
       reviewOutput: null,
     };
 
-    const result = await this.planGenerator.runDrafting(context, draftPath);
+    const result = await this.planGenerator.runDrafting(context, draftPath, repoDir);
 
     this.state.updateDraftPlanPath(task.issueId, draftPath);
 
@@ -335,10 +339,10 @@ class PloomyDaemon {
     await this.handleReviewing({
       ...item,
       task: this.state.getTask(task.issueId)!,
-    });
+    }, repoDir);
   }
 
-  private async handleReviewing(item: ActionableIssue): Promise<void> {
+  private async handleReviewing(item: ActionableIssue, repoDir: string): Promise<void> {
     const { issue, task } = item;
 
     if (!task.draftPlanPath) {
@@ -354,8 +358,6 @@ class PloomyDaemon {
       `${issue.number}.review.txt`
     );
 
-    const repoDir = await this.planReviewer.ensureRepoClone(issue);
-
     await this.planReviewer.reviewPlan(
       task.draftPlanPath,
       reviewPath,
@@ -368,10 +370,10 @@ class PloomyDaemon {
     await this.handleFinalizing({
       ...item,
       task: this.state.getTask(task.issueId)!,
-    });
+    }, repoDir);
   }
 
-  private async handleFinalizing(item: ActionableIssue): Promise<void> {
+  private async handleFinalizing(item: ActionableIssue, repoDir: string): Promise<void> {
     const { issue, task } = item;
 
     this.state.updateState(task.issueId, "FINALIZING");
@@ -408,7 +410,8 @@ class PloomyDaemon {
 
     const result = await this.planFinalizer.runFinalization(
       context,
-      finalPath
+      finalPath,
+      repoDir
     );
 
     if (result.hasQuestions && result.questions) {
