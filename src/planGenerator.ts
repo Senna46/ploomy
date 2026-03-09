@@ -648,14 +648,26 @@ export function extractSearchableText(claudeOutput: string): string {
 // Utility: truncate large stdout while preserving output markers
 // ============================================================
 
-const OUTPUT_MARKERS = ["PLAN_CONTENT:", "QUESTIONS:", "READY"];
+const OUTPUT_MARKER_PATTERNS: Array<{ pattern: RegExp; }> = [
+  { pattern: /PLAN_CONTENT:/g },
+  { pattern: /QUESTIONS:/g },
+  { pattern: /(?:^|\n)\s*READY\s*(?:\n|$)/g },
+];
 
 function truncatePreservingMarkers(output: string): string {
   let earliestMarkerIndex = -1;
-  for (const marker of OUTPUT_MARKERS) {
-    const idx = output.lastIndexOf(marker);
-    if (idx !== -1 && (earliestMarkerIndex === -1 || idx < earliestMarkerIndex)) {
-      earliestMarkerIndex = idx;
+  for (const { pattern } of OUTPUT_MARKER_PATTERNS) {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let lastMatch: RegExpExecArray | null = null;
+    while ((match = pattern.exec(output)) !== null) {
+      lastMatch = match;
+    }
+    if (lastMatch !== null) {
+      const idx = lastMatch.index;
+      if (earliestMarkerIndex === -1 || idx < earliestMarkerIndex) {
+        earliestMarkerIndex = idx;
+      }
     }
   }
 
