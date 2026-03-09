@@ -661,7 +661,7 @@ function sanitizeGitError(error: unknown): string {
 // Utility: extract searchable text from claude -p output
 // ============================================================
 
-export function extractSearchableText(claudeOutput: string): string {
+function extractSearchableText(claudeOutput: string): string {
   const trimmed = claudeOutput.trim();
 
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
@@ -703,7 +703,7 @@ const OUTPUT_MARKER_PATTERNS: Array<{ pattern: RegExp; }> = [
 ];
 
 function truncatePreservingMarkers(output: string): string {
-  let earliestMarkerIndex = -1;
+  let latestMarkerIndex = -1;
   for (const { pattern } of OUTPUT_MARKER_PATTERNS) {
     pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -713,14 +713,14 @@ function truncatePreservingMarkers(output: string): string {
     }
     if (lastMatch !== null) {
       const idx = lastMatch.index;
-      if (earliestMarkerIndex === -1 || idx < earliestMarkerIndex) {
-        earliestMarkerIndex = idx;
+      if (idx > latestMarkerIndex) {
+        latestMarkerIndex = idx;
       }
     }
   }
 
-  if (earliestMarkerIndex !== -1) {
-    return output.substring(earliestMarkerIndex);
+  if (latestMarkerIndex !== -1) {
+    return output.substring(latestMarkerIndex);
   }
 
   return output.substring(output.length - MAX_STDOUT_SIZE);
