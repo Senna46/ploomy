@@ -7,7 +7,7 @@ import type { IssueComment } from "./types.js";
 
 const PLOOMY_COMMENT_MARKER = "<!-- PLOOMY_COMMENT -->";
 
-export function isBotComment(comment: IssueComment): boolean {
+function isBotComment(comment: IssueComment): boolean {
   return comment.body.includes(PLOOMY_COMMENT_MARKER);
 }
 
