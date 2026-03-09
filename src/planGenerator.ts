@@ -258,7 +258,7 @@ export class PlanGenerator {
   // ============================================================
 
   private parseQuestioningOutput(output: string): QuestioningResult {
-    const text = extractSearchableText(output);
+    const text = output;
 
     const questionsMatch = text.match(/QUESTIONS:\s*\n([\s\S]+?)(?=\nREADY\s*$|\nPLAN_CONTENT:\s*\n|$)/s);
     if (questionsMatch) {
@@ -282,7 +282,7 @@ export class PlanGenerator {
   }
 
   private parseDraftingOutput(output: string): DraftingResult {
-    const text = extractSearchableText(output);
+    const text = output;
 
     const planMatch = text.match(/PLAN_CONTENT:\s*\n([\s\S]+)/);
     if (planMatch) {
