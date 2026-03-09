@@ -67,7 +67,7 @@ export class PlanGenerator {
       projectStructure
     );
 
-    const output = await this.runClaude(repoDir, prompt);
+    const output = await this.runClaude(repoDir, prompt, "questioning");
     return this.parseQuestioningOutput(output);
   }
 
@@ -89,7 +89,7 @@ export class PlanGenerator {
       projectStructure
     );
 
-    const output = await this.runClaude(repoDir, prompt);
+    const output = await this.runClaude(repoDir, prompt, "drafting");
     const result = this.parseDraftingOutput(output);
 
     mkdirSync(join(outputPath, ".."), { recursive: true });
@@ -301,8 +301,8 @@ export class PlanGenerator {
   // Claude CLI execution (delegates to shared function)
   // ============================================================
 
-  private async runClaude(repoDir: string, prompt: string): Promise<string> {
-    return runClaude(repoDir, prompt, this.config.claudeModel);
+  private async runClaude(repoDir: string, prompt: string, label = ""): Promise<string> {
+    return runClaude(repoDir, prompt, this.config.claudeModel, label);
   }
 
   // ============================================================

@@ -14,7 +14,6 @@ import type {
   ActionableIssue,
   Config,
   GitHubIssue,
-  IssueComment,
   PlanState,
 } from "./types.js";
 
@@ -117,7 +116,7 @@ export class IssueMonitor {
       if (existingTask.reviewOutputPath && existsSync(existingTask.reviewOutputPath)) {
         resumeState = "FINALIZING";
       } else if (existingTask.draftPlanPath && existsSync(existingTask.draftPlanPath)) {
-        resumeState = "REVIEWING";
+        resumeState = "DRAFTING";
       } else {
         resumeState = "PENDING";
       }
@@ -201,7 +200,7 @@ export class IssueMonitor {
       }
     );
 
-    return { issue, task: updatedTask, newComments: newHumanComments };
+    return { issue, task: updatedTask, newComments: [] };
   }
 
   // ============================================================
