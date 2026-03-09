@@ -573,7 +573,10 @@ async function buildGitAuthHeader(): Promise<string | null> {
 function sanitizeGitError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   // Strip any accidentally leaked tokens from error output
-  return message.replace(/x-access-token:[^\s@]+/g, "x-access-token:[REDACTED]");
+  return message
+    .replace(/x-access-token:[^\s@]+/g, "x-access-token:[REDACTED]")
+    .replace(/Authorization: basic [A-Za-z0-9+/=]+/g, "Authorization: basic [REDACTED]")
+    .replace(/http\.extraheader=Authorization: basic [A-Za-z0-9+/=]+/g, "http.extraheader=[REDACTED]");
 }
 
 // ============================================================
