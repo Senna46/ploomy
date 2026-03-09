@@ -251,7 +251,7 @@ export class IssueMonitor {
 // Utilities
 // ============================================================
 
-export function formatIssueId(
+function formatIssueId(
   owner: string,
   repo: string,
   issueNumber: number

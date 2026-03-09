@@ -605,8 +605,8 @@ function sanitizeGitError(error: unknown): string {
   // Strip any accidentally leaked tokens from error output
   return message
     .replace(/x-access-token:[^\s@]+/g, "x-access-token:[REDACTED]")
-    .replace(/Authorization: basic [A-Za-z0-9+/=]+/g, "Authorization: basic [REDACTED]")
-    .replace(/http\.extraheader=Authorization: basic [A-Za-z0-9+/=]+/g, "http.extraheader=[REDACTED]");
+    .replace(/http\.extraheader=Authorization: basic [A-Za-z0-9+/=]+/g, "http.extraheader=[REDACTED]")
+    .replace(/Authorization: basic [A-Za-z0-9+/=]+/g, "Authorization: basic [REDACTED]");
 }
 
 // ============================================================
