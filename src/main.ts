@@ -46,6 +46,7 @@ class PloomyDaemon {
   private conversation!: ConversationManager;
   private branchManager!: PlanBranchManager;
   private isShuttingDown = false;
+  private stateClosed = false;
 
   constructor(config: Config) {
     this.config = config;
@@ -451,12 +452,18 @@ class PloomyDaemon {
   }
 
   private shutdown(): void {
-    this.state.close();
+    if (!this.stateClosed) {
+      this.state.close();
+      this.stateClosed = true;
+    }
     logger.info("Ploomy stopped.");
   }
 
   closeState(): void {
-    this.state.close();
+    if (!this.stateClosed) {
+      this.state.close();
+      this.stateClosed = true;
+    }
   }
 
   private sleep(ms: number): Promise<void> {
