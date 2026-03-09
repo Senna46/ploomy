@@ -109,6 +109,7 @@ export class IssueMonitor {
         );
         return null;
       }
+      this.state.clearErrorMessage(issueId);
       this.state.updateState(issueId, "PENDING");
       const updatedTask = this.state.getTask(issueId)!;
       return { issue, task: updatedTask, newComments: [] };

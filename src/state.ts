@@ -145,6 +145,15 @@ export class StateStore {
     });
   }
 
+  clearErrorMessage(issueId: string): void {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        "UPDATE issue_tasks SET error_message = NULL, updated_at = ? WHERE issue_id = ?"
+      )
+      .run(now, issueId);
+  }
+
   // ============================================================
   // Field updates
   // ============================================================

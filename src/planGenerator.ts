@@ -499,69 +499,81 @@ export async function ensureRepoClone(
   mkdirSync(workDir, { recursive: true });
 
   const repoDir = join(workDir, issue.owner, issue.repo);
-  const cloneUrl = await buildAuthenticatedCloneUrl(issue.owner, issue.repo);
+  const cloneUrl = `https://github.com/${issue.owner}/${issue.repo}.git`;
+  const authHeader = await buildGitAuthHeader();
+  const authArgs = authHeader ? ["-c", `http.extraheader=${authHeader}`] : [];
 
-  if (existsSync(join(repoDir, ".git"))) {
-    logger.debug("Fetching latest for existing clone.", { repoDir });
-    await execFileAsync("git", ["remote", "set-url", "origin", cloneUrl], {
-      cwd: repoDir,
-      timeout: 30_000,
-    });
-    await execFileAsync("git", ["fetch", "--all", "--prune"], {
-      cwd: repoDir,
-      timeout: 2 * 60 * 1000,
-    });
-    // Update working tree to match remote HEAD so Claude explores current code
-    const { stdout: defaultRef } = await execFileAsync(
-      "git",
-      ["symbolic-ref", "refs/remotes/origin/HEAD"],
-      { cwd: repoDir, timeout: 30_000 }
-    ).catch(() => ({ stdout: "" }));
-    const resetTarget = defaultRef.trim() || "origin/HEAD";
-    await execFileAsync("git", ["reset", "--hard", resetTarget], {
-      cwd: repoDir,
-      timeout: 30_000,
-    });
-  } else {
-    logger.info("Cloning repository.", {
-      owner: issue.owner,
-      repo: issue.repo,
-      repoDir,
-    });
-    mkdirSync(join(workDir, issue.owner), { recursive: true });
-    await execFileAsync(
-      "git",
-      ["clone", cloneUrl, join(issue.owner, issue.repo)],
-      {
-        cwd: workDir,
+  try {
+    if (existsSync(join(repoDir, ".git"))) {
+      logger.debug("Fetching latest for existing clone.", { repoDir });
+      // Ensure the remote URL does not contain embedded tokens
+      await execFileAsync("git", ["remote", "set-url", "origin", cloneUrl], {
+        cwd: repoDir,
+        timeout: 30_000,
+      });
+      await execFileAsync("git", [...authArgs, "fetch", "--all", "--prune"], {
+        cwd: repoDir,
         timeout: 2 * 60 * 1000,
-      }
-    );
+      });
+      // Update working tree to match remote HEAD so Claude explores current code
+      const { stdout: defaultRef } = await execFileAsync(
+        "git",
+        ["symbolic-ref", "refs/remotes/origin/HEAD"],
+        { cwd: repoDir, timeout: 30_000 }
+      ).catch(() => ({ stdout: "" }));
+      const resetTarget = defaultRef.trim() || "origin/HEAD";
+      await execFileAsync("git", ["reset", "--hard", resetTarget], {
+        cwd: repoDir,
+        timeout: 30_000,
+      });
+    } else {
+      logger.info("Cloning repository.", {
+        owner: issue.owner,
+        repo: issue.repo,
+        repoDir,
+      });
+      mkdirSync(join(workDir, issue.owner), { recursive: true });
+      await execFileAsync(
+        "git",
+        [...authArgs, "clone", cloneUrl, join(issue.owner, issue.repo)],
+        {
+          cwd: workDir,
+          timeout: 2 * 60 * 1000,
+        }
+      );
+    }
+  } catch (error) {
+    throw new Error(sanitizeGitError(error));
   }
 
   return repoDir;
 }
 
-async function buildAuthenticatedCloneUrl(
-  owner: string,
-  repo: string
-): Promise<string> {
+async function buildGitAuthHeader(): Promise<string | null> {
   const envToken = process.env.GH_TOKEN?.trim();
   if (envToken) {
-    return `https://x-access-token:${envToken}@github.com/${owner}/${repo}.git`;
+    const encoded = Buffer.from(`x-access-token:${envToken}`).toString("base64");
+    return `Authorization: basic ${encoded}`;
   }
 
   try {
     const { stdout } = await execFileAsync("gh", ["auth", "token"]);
     const token = stdout.trim();
     if (token) {
-      return `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+      const encoded = Buffer.from(`x-access-token:${token}`).toString("base64");
+      return `Authorization: basic ${encoded}`;
     }
   } catch {
-    logger.debug("Could not obtain token from gh CLI for git clone URL.");
+    logger.debug("Could not obtain token from gh CLI for git auth header.");
   }
 
-  return `https://github.com/${owner}/${repo}.git`;
+  return null;
+}
+
+function sanitizeGitError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  // Strip any accidentally leaked tokens from error output
+  return message.replace(/x-access-token:[^\s@]+/g, "x-access-token:[REDACTED]");
 }
 
 // ============================================================
