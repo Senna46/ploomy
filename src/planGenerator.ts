@@ -24,7 +24,7 @@ import type {
 
 const execFileAsync = promisify(execFile);
 
-const ALLOWED_TOOLS = [
+export const ALLOWED_TOOLS = [
   "Read",
   "Bash(find *)",
   "Bash(grep *)",
@@ -37,7 +37,7 @@ const ALLOWED_TOOLS = [
   "Bash(tail *)",
 ].join(",");
 
-const CLAUDE_TIMEOUT_MS = 10 * 60 * 1000;
+export const CLAUDE_TIMEOUT_MS = 10 * 60 * 1000;
 const SIGKILL_GRACE_MS = 5_000;
 const MAX_STDOUT_SIZE = 500_000;
 const MAX_DOC_SIZE = 10_000;
@@ -254,36 +254,11 @@ export class PlanGenerator {
   }
 
   // ============================================================
-  // Conversation history formatter
+  // Conversation history formatter (delegates to shared function)
   // ============================================================
 
   private formatConversationHistory(context: ConversationContext): string {
-    const parts: string[] = [];
-
-    parts.push(
-      `## Issue: ${context.issue.title}\n\n` +
-        `**Author:** @${context.issue.author}\n` +
-        `**URL:** ${context.issue.htmlUrl}\n\n` +
-        `### Issue body\n\n${context.issue.body || "(empty)"}`
-    );
-
-    if (context.comments.length > 0) {
-      const commentEntries = context.comments
-        .map(
-          (c) =>
-            `**@${c.author}** (${c.createdAt}):\n${c.body}`
-        )
-        .join("\n\n---\n\n");
-      parts.push(`### Conversation history\n\n${commentEntries}`);
-    }
-
-    if (context.draftPlan) {
-      parts.push(
-        `### Previous draft plan\n\n${context.draftPlan}`
-      );
-    }
-
-    return parts.join("\n\n");
+    return formatConversationHistory(context);
   }
 
   // ============================================================
@@ -331,89 +306,11 @@ export class PlanGenerator {
   }
 
   // ============================================================
-  // Claude CLI execution
+  // Claude CLI execution (delegates to shared function)
   // ============================================================
 
   private async runClaude(repoDir: string, prompt: string): Promise<string> {
-    const args = ["-p", "--allowedTools", ALLOWED_TOOLS];
-
-    if (this.config.claudeModel) {
-      args.push("--model", this.config.claudeModel);
-    }
-
-    logger.info("Running claude -p...", { repoDir });
-
-    return new Promise<string>((resolve, reject) => {
-      let settled = false;
-
-      const child = spawn("claude", args, {
-        cwd: repoDir,
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-
-      let stdout = "";
-      let stderr = "";
-
-      const killTimer = setTimeout(() => {
-        if (settled) return;
-        logger.warn("claude -p timed out, sending SIGTERM.", {
-          timeoutMs: CLAUDE_TIMEOUT_MS,
-        });
-        child.kill("SIGTERM");
-        setTimeout(() => {
-          if (settled) return;
-          logger.warn(
-            "claude -p did not exit after SIGTERM, sending SIGKILL."
-          );
-          child.kill("SIGKILL");
-        }, SIGKILL_GRACE_MS);
-      }, CLAUDE_TIMEOUT_MS);
-
-      child.stdout.on("data", (data: Buffer) => {
-        stdout += data.toString();
-        if (stdout.length > MAX_STDOUT_SIZE) {
-          stdout = stdout.substring(stdout.length - MAX_STDOUT_SIZE);
-        }
-      });
-
-      child.stderr.on("data", (data: Buffer) => {
-        stderr += data.toString();
-      });
-
-      child.on("close", (code, signal) => {
-        clearTimeout(killTimer);
-        if (settled) return;
-        settled = true;
-
-        if (signal === "SIGTERM" || signal === "SIGKILL") {
-          reject(
-            new Error(
-              `claude -p timed out after ${CLAUDE_TIMEOUT_MS / 1000}s. stderr: ${stderr.substring(0, 500)}`
-            )
-          );
-          return;
-        }
-        if (code !== 0) {
-          reject(
-            new Error(
-              `claude -p exited with code ${code}. stderr: ${stderr.substring(0, 500)}`
-            )
-          );
-          return;
-        }
-        resolve(stdout);
-      });
-
-      child.on("error", (error) => {
-        clearTimeout(killTimer);
-        if (settled) return;
-        settled = true;
-        reject(new Error(`claude -p failed: ${error.message}`));
-      });
-
-      child.stdin.write(prompt);
-      child.stdin.end();
-    });
+    return runClaude(repoDir, prompt, this.config.claudeModel);
   }
 
   // ============================================================
@@ -486,6 +383,139 @@ export class PlanGenerator {
 
     return sections.join("\n\n");
   }
+}
+
+// ============================================================
+// Shared utility: format conversation history for Claude prompts
+// ============================================================
+
+export function formatConversationHistory(context: ConversationContext): string {
+  const parts: string[] = [];
+
+  parts.push(
+    `## Issue: ${context.issue.title}\n\n` +
+      `**Author:** @${context.issue.author}\n` +
+      `**URL:** ${context.issue.htmlUrl}\n\n` +
+      `### Issue body\n\n${context.issue.body || "(empty)"}`
+  );
+
+  if (context.comments.length > 0) {
+    const commentEntries = context.comments
+      .map(
+        (c) =>
+          `**@${c.author}** (${c.createdAt}):\n${c.body}`
+      )
+      .join("\n\n---\n\n");
+    parts.push(`### Conversation history\n\n${commentEntries}`);
+  }
+
+  if (context.draftPlan) {
+    parts.push(
+      `### Previous draft plan\n\n${context.draftPlan}`
+    );
+  }
+
+  return parts.join("\n\n");
+}
+
+// ============================================================
+// Shared utility: run Claude CLI with prompt via stdin
+// ============================================================
+
+export async function runClaude(
+  repoDir: string,
+  prompt: string,
+  claudeModel: string | null,
+  label = ""
+): Promise<string> {
+  const args = ["-p", "--allowedTools", ALLOWED_TOOLS];
+
+  if (claudeModel) {
+    args.push("--model", claudeModel);
+  }
+
+  const logLabel = label ? ` (${label})` : "";
+  logger.info(`Running claude -p${logLabel}...`, { repoDir });
+
+  return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    if (!existsSync(repoDir)) {
+      reject(
+        new Error(
+          `runClaude${logLabel}: target repo directory does not exist: ${repoDir}. Ensure the repository is cloned first.`
+        )
+      );
+      return;
+    }
+
+    const child = spawn("claude", args, {
+      cwd: repoDir,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    const killTimer = setTimeout(() => {
+      if (settled) return;
+      logger.warn(`claude -p${logLabel} timed out, sending SIGTERM.`, {
+        timeoutMs: CLAUDE_TIMEOUT_MS,
+      });
+      child.kill("SIGTERM");
+      setTimeout(() => {
+        if (settled) return;
+        logger.warn(
+          `claude -p${logLabel} did not exit after SIGTERM, sending SIGKILL.`
+        );
+        child.kill("SIGKILL");
+      }, SIGKILL_GRACE_MS);
+    }, CLAUDE_TIMEOUT_MS);
+
+    child.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString();
+      if (stdout.length > MAX_STDOUT_SIZE) {
+        stdout = stdout.substring(stdout.length - MAX_STDOUT_SIZE);
+      }
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    child.on("close", (code, signal) => {
+      clearTimeout(killTimer);
+      if (settled) return;
+      settled = true;
+
+      if (signal === "SIGTERM" || signal === "SIGKILL") {
+        reject(
+          new Error(
+            `claude -p${logLabel} timed out after ${CLAUDE_TIMEOUT_MS / 1000}s. stderr: ${stderr.substring(0, 500)}`
+          )
+        );
+        return;
+      }
+      if (code !== 0) {
+        reject(
+          new Error(
+            `claude -p${logLabel} exited with code ${code}. stderr: ${stderr.substring(0, 500)}`
+          )
+        );
+        return;
+      }
+      resolve(stdout);
+    });
+
+    child.on("error", (error) => {
+      clearTimeout(killTimer);
+      if (settled) return;
+      settled = true;
+      reject(new Error(`claude -p${logLabel} failed: ${error.message}`));
+    });
+
+    child.stdin.write(prompt);
+    child.stdin.end();
+  });
 }
 
 // ============================================================

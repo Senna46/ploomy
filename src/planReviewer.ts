@@ -59,7 +59,7 @@ export class PlanReviewer {
       "read-only",
       "--output-last-message",
       outputMessagePath,
-      prompt,
+      "-",
     ];
 
     logger.info("Running codex exec for plan review...", {
@@ -67,7 +67,7 @@ export class PlanReviewer {
       draftPlanPath,
     });
 
-    await this.runCodex(args, repoDir);
+    await this.runCodex(args, repoDir, prompt);
 
     let reviewContent: string;
     try {
@@ -106,7 +106,7 @@ export class PlanReviewer {
   // Codex CLI execution
   // ============================================================
 
-  private async runCodex(args: string[], cwd: string): Promise<void> {
+  private async runCodex(args: string[], cwd: string, prompt?: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       let settled = false;
 
@@ -167,6 +167,9 @@ export class PlanReviewer {
         reject(new Error(`codex exec failed: ${error.message}`));
       });
 
+      if (prompt) {
+        child.stdin.write(prompt);
+      }
       child.stdin.end();
     });
   }
