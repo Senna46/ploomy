@@ -86,10 +86,6 @@ export class PlanFinalizer {
 
     sections.push(formatConversationHistory(context));
 
-    if (context.draftPlan) {
-      sections.push(`## Draft plan\n\n${context.draftPlan}`);
-    }
-
     if (context.reviewOutput) {
       sections.push(`## Codex review suggestions\n\n${context.reviewOutput}`);
     }

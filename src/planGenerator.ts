@@ -24,7 +24,7 @@ import type {
 
 const execFileAsync = promisify(execFile);
 
-export const ALLOWED_TOOLS = [
+const ALLOWED_TOOLS = [
   "Read",
   "Bash(find *)",
   "Bash(grep *)",
@@ -37,7 +37,7 @@ export const ALLOWED_TOOLS = [
   "Bash(tail *)",
 ].join(",");
 
-export const CLAUDE_TIMEOUT_MS = 10 * 60 * 1000;
+const CLAUDE_TIMEOUT_MS = 10 * 60 * 1000;
 const SIGKILL_GRACE_MS = 5_000;
 const MAX_STDOUT_SIZE = 500_000;
 const MAX_DOC_SIZE = 10_000;
