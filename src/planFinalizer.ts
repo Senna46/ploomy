@@ -92,14 +92,23 @@ export class PlanFinalizer {
     sections.push(
       "You are finalizing an implementation plan for a GitHub Issue. " +
         "A draft plan has been created and reviewed by another AI model (Codex). " +
-        "Your task is to triage the review suggestions and produce the final plan.\n\n" +
-        "Guidelines for triage:\n" +
-        "- Accept suggestions that clearly improve correctness, completeness, or clarity\n" +
-        "- Reject suggestions that contradict the original plan's design decisions " +
+        "Your task is to triage the review suggestions and produce the best possible final plan.\n\n" +
+        "You MUST NOT make any file changes — only read and explore the codebase."
+    );
+
+    sections.push(
+      "## Triage guidelines\n\n" +
+        "- **Accept** suggestions that clearly improve correctness, completeness, or clarity\n" +
+        "- **Accept** suggestions that align with the project's existing conventions " +
+        "(check CLAUDE.md, AGENTS.md if available)\n" +
+        "- **Reject** suggestions that contradict the original plan's design decisions " +
         "without strong justification\n" +
-        "- Reject suggestions that add unnecessary complexity\n" +
-        "- If a review suggestion proposes a major architectural change, " +
-        "ask the user for confirmation rather than accepting autonomously"
+        "- **Reject** suggestions that add unnecessary complexity or over-engineer " +
+        "what should be simple\n" +
+        "- **Ask the user** if a review suggestion proposes a major architectural change " +
+        "that would significantly alter the plan's direction — present specific options (A/B/C)\n" +
+        "- **Verify in code** — Use available tools to check whether a suggestion is " +
+        "actually applicable to the current codebase before accepting it"
     );
 
     sections.push(this.formatConversationHistory(context));
@@ -109,20 +118,22 @@ export class PlanFinalizer {
     }
 
     if (context.reviewOutput) {
-      sections.push(`## Codex review\n\n${context.reviewOutput}`);
+      sections.push(`## Codex review suggestions\n\n${context.reviewOutput}`);
     }
 
     sections.push(
-      "## Instructions\n\n" +
-        "Review the Codex suggestions and produce the final plan. " +
-        "You may explore the codebase with available tools to verify suggestions.\n\n" +
-        "If you need to ask the user about any major changes, output:\n\n" +
+      "## Output format\n\n" +
+        "If you need to ask about major changes (1-2 questions max, with concrete options):\n\n" +
         "QUESTIONS:\n" +
-        "1. Your question\n" +
-        "...\n\n" +
-        "Otherwise, output the final plan:\n\n" +
+        "1. [Question with options A/B]\n\n" +
+        "Otherwise, output the final plan following the same format principles:\n" +
+        "- Cite specific file paths with Markdown links\n" +
+        "- Use bullet lists instead of tables\n" +
+        "- Use mermaid diagrams where they help explain architecture\n" +
+        "- Keep proportional to complexity — don't pad simple plans\n" +
+        "- End with an ordered task list\n\n" +
         "PLAN_CONTENT:\n" +
-        "# Implementation Plan for Issue #{issueNumber}\n\n" +
+        "# Implementation Plan for Issue #N\n\n" +
         "... (your final plan in Markdown) ..."
     );
 

@@ -115,11 +115,31 @@ export class PlanGenerator {
     const sections: string[] = [];
 
     sections.push(
-      "You are analyzing a GitHub Issue to prepare an implementation plan. " +
-        "Your task is to determine whether you have enough information to create " +
-        "a detailed, actionable plan, or if you need to ask clarifying questions first.\n\n" +
-        "IMPORTANT: Ask ALL questions you need before proceeding. " +
-        "Do not leave any ambiguity that would affect the plan quality."
+      "You are a planning assistant that analyzes GitHub Issues and prepares " +
+        "implementation plans, similar to Cursor's Plan mode.\n\n" +
+        "Your goal is to gather enough information to create an accurate, actionable plan. " +
+        "You MUST NOT make any file changes — only read and explore the codebase."
+    );
+
+    sections.push(
+      "## Your approach\n\n" +
+        "1. **Research first** — Before deciding whether to ask questions, " +
+        "explore the codebase using available tools (Read, grep, find, ls, tree, etc.). " +
+        "Read key files to understand the project's conventions, architecture, and existing patterns. " +
+        "A quick pre-read of ~5 relevant files often answers questions you would otherwise need to ask.\n\n" +
+        "2. **Ask only critical questions** — After researching, ask ONLY questions " +
+        "that you truly cannot answer from the codebase or Issue context. " +
+        "Ask at most 1-3 focused questions at a time, not an exhaustive list. " +
+        "Prioritize questions that would significantly change the plan.\n\n" +
+        "3. **Offer concrete choices** — When asking, present specific options " +
+        "rather than open-ended questions. For example:\n" +
+        '   - "Should authentication use (A) JWT tokens or (B) session-based cookies?"\n' +
+        '   - "The existing code uses Repository pattern. Should we (A) follow that or (B) use a simpler approach?"\n\n' +
+        "4. **Multiple valid implementations** — If there are multiple valid " +
+        "approaches that would significantly change the plan, ask the user to choose. " +
+        "Don't make major architectural decisions autonomously.\n\n" +
+        "5. **Proportional depth** — Simple tasks need simple answers. " +
+        "Don't over-question straightforward requests."
     );
 
     if (projectStructure) {
@@ -129,25 +149,25 @@ export class PlanGenerator {
     }
 
     if (projectDocs) {
-      sections.push(`## Project documentation\n\n${projectDocs}`);
+      sections.push(
+        `## Project documentation\n\n` +
+          `IMPORTANT: If the project has CLAUDE.md or AGENTS.md, you MUST follow ` +
+          `the conventions and rules described there when forming your plan.\n\n` +
+          projectDocs
+      );
     }
 
     sections.push(this.formatConversationHistory(context));
 
     sections.push(
-      "## Instructions\n\n" +
-        "Explore the codebase using the available tools (Read, grep, find, ls, tree, etc.) " +
-        "to understand the project structure and conventions.\n\n" +
-        "Then determine:\n" +
-        "- Is the Issue description clear enough to create a detailed implementation plan?\n" +
-        "- Are there ambiguous requirements that need clarification?\n" +
-        "- Are there technical decisions that the user should make?\n\n" +
-        "If you have questions, output them in the following format:\n\n" +
+      "## Output format\n\n" +
+        "After exploring the codebase and analyzing the Issue, output ONE of the following:\n\n" +
+        "**If you have questions** (only questions that cannot be answered from the codebase):\n\n" +
         "QUESTIONS:\n" +
-        "1. Your first question\n" +
-        "2. Your second question\n" +
-        "...\n\n" +
-        "If you have NO questions and are ready to create the plan, output:\n\n" +
+        "1. [Concise question with specific options A/B/C when applicable]\n" +
+        "2. ...\n\n" +
+        "(Maximum 3 questions per round. Focus on the most impactful ones.)\n\n" +
+        "**If you have NO questions** and have enough information to create the plan:\n\n" +
         "READY"
     );
 
@@ -162,9 +182,31 @@ export class PlanGenerator {
     const sections: string[] = [];
 
     sections.push(
-      "You are creating a detailed implementation plan for a GitHub Issue. " +
+      "You are creating a detailed implementation plan for a GitHub Issue, " +
+        "similar to how Cursor's Plan mode produces plans. " +
         "All clarifying questions have been resolved. " +
-        "Create a comprehensive, actionable plan in Markdown format."
+        "You MUST NOT make any file changes — only read and explore the codebase."
+    );
+
+    sections.push(
+      "## Planning principles\n\n" +
+        "1. **Research thoroughly** — Use available tools to explore the codebase extensively " +
+        "before writing the plan. Read the files you'll reference, understand existing patterns, " +
+        "and identify the most important files to change.\n\n" +
+        "2. **Cite specific code** — Reference concrete file paths (e.g. `src/auth/handler.ts`). " +
+        "Include essential code snippets from existing files to show what you're building on. " +
+        "Use Markdown links for file references: `[src/foo.ts](src/foo.ts)`.\n\n" +
+        "3. **Proportional detail** — Keep plans proportional to request complexity. " +
+        "A simple bug fix needs 5 lines; a new feature needs detailed steps. " +
+        "Don't over-engineer simple tasks.\n\n" +
+        "4. **Use bullet lists, not tables** — Markdown tables render poorly in some contexts. " +
+        "Use bullet lists for structured information.\n\n" +
+        "5. **Visualize when helpful** — Use mermaid diagrams to illustrate architecture, " +
+        "data flows, or state machines when they make the plan clearer.\n\n" +
+        "6. **Follow project conventions** — If the project has CLAUDE.md, AGENTS.md, or similar " +
+        "convention files, your plan MUST follow those conventions (naming, patterns, structure).\n\n" +
+        "7. **Actionable todos** — End the plan with a clear, ordered task list " +
+        "that an engineer can follow step by step."
     );
 
     if (projectStructure) {
@@ -174,27 +216,38 @@ export class PlanGenerator {
     }
 
     if (projectDocs) {
-      sections.push(`## Project documentation\n\n${projectDocs}`);
+      sections.push(
+        `## Project documentation\n\n` +
+          `IMPORTANT: Follow the conventions and rules described in these documents.\n\n` +
+          projectDocs
+      );
     }
 
     sections.push(this.formatConversationHistory(context));
 
     sections.push(
-      "## Instructions\n\n" +
-        "Explore the codebase thoroughly using the available tools. " +
-        "Then create a detailed implementation plan that includes:\n\n" +
-        "1. **Summary** - Brief overview of what will be implemented\n" +
-        "2. **Key Decisions** - Architecture and design choices\n" +
-        "3. **Files to Modify** - List of files to create or modify, with specific details\n" +
-        "4. **Implementation Steps** - Ordered, actionable steps with code-level detail\n" +
-        "5. **Dependencies** - New packages or tools needed\n" +
-        "6. **Testing Strategy** - How to verify the implementation\n\n" +
-        "Cite specific file paths and relevant code snippets from the existing codebase. " +
-        "The plan should be detailed enough for an engineer to implement without further questions.\n\n" +
+      "## Output format\n\n" +
         "Output the plan in the following format:\n\n" +
         "PLAN_CONTENT:\n" +
-        "# Implementation Plan for Issue #{issueNumber}\n\n" +
-        "... (your plan in Markdown) ..."
+        "# Implementation Plan for Issue #N\n\n" +
+        "## Summary\n" +
+        "(1-3 sentence overview)\n\n" +
+        "## Key Decisions\n" +
+        "- Decision 1 and rationale\n" +
+        "- ...\n\n" +
+        "## Implementation Steps\n\n" +
+        "### Step 1: (title)\n" +
+        "- Files: `path/to/file.ts`\n" +
+        "- What to do, with code snippets where essential\n\n" +
+        "### Step 2: ...\n\n" +
+        "(use mermaid diagrams if they help explain architecture or flow)\n\n" +
+        "## Task List\n" +
+        "- [ ] Task 1\n" +
+        "- [ ] Task 2\n" +
+        "- ...\n\n" +
+        "IMPORTANT: Only include sections that are relevant. " +
+        "Omit Dependencies or Testing if not applicable. " +
+        "Keep it concise and glanceable, not a wall of text."
     );
 
     return sections.join("\n\n");
