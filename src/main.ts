@@ -31,8 +31,6 @@ import type {
   ActionableIssue,
   Config,
   ConversationContext,
-  IssueComment,
-  PlanState,
 } from "./types.js";
 
 class PloomyDaemon {
