@@ -6,12 +6,10 @@
 //   which may not resolve GitHub app bots correctly.
 
 import { GitHubClient } from "./githubClient.js";
-import { collectMentionTargets } from "./issueParser.js";
+import { collectMentionTargets, PLOOMY_COMMENT_MARKER } from "./issueParser.js";
 import { logger } from "./logger.js";
 import { StateStore } from "./state.js";
 import type { IssueComment, IssueTask, PlanState } from "./types.js";
-
-const PLOOMY_COMMENT_MARKER = "<!-- PLOOMY_COMMENT -->";
 
 function ploomyStateMarker(state: PlanState): string {
   return `<!-- PLOOMY_STATE: ${state} -->`;
