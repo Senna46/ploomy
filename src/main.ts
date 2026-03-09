@@ -342,7 +342,7 @@ class PloomyDaemon {
 
     const repoDir = await this.planReviewer.ensureRepoClone(issue);
 
-    const result = await this.planReviewer.reviewPlan(
+    await this.planReviewer.reviewPlan(
       task.draftPlanPath,
       reviewPath,
       repoDir
@@ -455,6 +455,10 @@ class PloomyDaemon {
     logger.info("Ploomy stopped.");
   }
 
+  closeState(): void {
+    this.state.close();
+  }
+
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
@@ -557,6 +561,7 @@ function releaseLock(lockPath: string): void {
 
 async function main(): Promise<void> {
   let lockPath: string | null = null;
+  let daemon: PloomyDaemon | null = null;
   try {
     const config = loadConfig();
     setLogLevel(config.logLevel);
@@ -564,15 +569,15 @@ async function main(): Promise<void> {
     mkdirSync(dirname(config.dbPath), { recursive: true });
     lockPath = acquireLock(config.dbPath);
 
-    const daemon = new PloomyDaemon(config);
+    daemon = new PloomyDaemon(config);
     await daemon.initialize();
     await daemon.run();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[FATAL] ${message}`);
-    if (lockPath) releaseLock(lockPath);
     process.exit(1);
   } finally {
+    if (daemon) daemon.closeState();
     if (lockPath) releaseLock(lockPath);
   }
 }
