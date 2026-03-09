@@ -289,6 +289,28 @@ class PloomyDaemon {
 
     this.state.updateState(task.issueId, "DRAFTING");
 
+    const draftPath = join(
+      this.config.plansDir,
+      issue.owner,
+      issue.repo,
+      `${issue.number}.draft.plan.md`
+    );
+
+    // If the draft already exists (e.g. FAILED retry), skip re-generation
+    // and the duplicate summary comment — go straight to review.
+    if (task.draftPlanPath && existsSync(task.draftPlanPath)) {
+      logger.info(
+        `Draft already exists for ${task.issueId}, skipping to review.`,
+        { draftPlanPath: task.draftPlanPath }
+      );
+      this.state.updateState(task.issueId, "REVIEWING");
+      await this.handleReviewing({
+        ...item,
+        task: this.state.getTask(task.issueId)!,
+      });
+      return;
+    }
+
     const allComments = await this.github.getIssueComments(
       issue.owner,
       issue.repo,
@@ -301,13 +323,6 @@ class PloomyDaemon {
       draftPlan: null,
       reviewOutput: null,
     };
-
-    const draftPath = join(
-      this.config.plansDir,
-      issue.owner,
-      issue.repo,
-      `${issue.number}.draft.plan.md`
-    );
 
     const result = await this.planGenerator.runDrafting(context, draftPath);
 

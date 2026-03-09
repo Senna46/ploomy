@@ -93,7 +93,7 @@ export class IssueMonitor {
         issue.number,
         issue.author
       );
-      return { issue, task, newComments: [] };
+      return { issue, task };
     }
 
     // Already completed
@@ -123,7 +123,7 @@ export class IssueMonitor {
 
       this.state.updateState(issueId, resumeState);
       const updatedTask = this.state.getTask(issueId)!;
-      return { issue, task: updatedTask, newComments: [] };
+      return { issue, task: updatedTask };
     }
 
     // Awaiting user: check for new human comments
@@ -144,7 +144,7 @@ export class IssueMonitor {
       "FINALIZING",
     ];
     if (activeStates.includes(existingTask.state)) {
-      return { issue, task: existingTask, newComments: [] };
+      return { issue, task: existingTask };
     }
 
     return null;
@@ -200,7 +200,7 @@ export class IssueMonitor {
       }
     );
 
-    return { issue, task: updatedTask, newComments: [] };
+    return { issue, task: updatedTask };
   }
 
   // ============================================================

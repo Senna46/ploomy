@@ -127,5 +127,4 @@ export interface FinalizingResult {
 export interface ActionableIssue {
   issue: GitHubIssue;
   task: IssueTask;
-  newComments: IssueComment[];
 }
