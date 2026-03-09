@@ -559,5 +559,5 @@ export function extractSearchableText(claudeOutput: string): string {
     }
   }
 
-  return claudeOutput;
+  return trimmed;
 }
