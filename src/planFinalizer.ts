@@ -219,7 +219,15 @@ export class PlanFinalizer {
 
     return new Promise<string>((resolve, reject) => {
       let settled = false;
-      const cwd = existsSync(repoDir) ? repoDir : process.cwd();
+      if (!existsSync(repoDir)) {
+        reject(
+          new Error(
+            `runClaude (finalization): target repo directory does not exist: ${repoDir}. Ensure the repository is cloned first.`
+          )
+        );
+        return;
+      }
+      const cwd = repoDir;
 
       const child = spawn("claude", args, {
         cwd,

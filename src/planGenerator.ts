@@ -302,7 +302,7 @@ export class PlanGenerator {
       };
     }
 
-    if (text.includes("READY")) {
+    if (/(?:^|\n)\s*READY\s*(?:\n|$)/.test(text)) {
       return { hasQuestions: false, questions: null, ready: true };
     }
 
