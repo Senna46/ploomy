@@ -722,7 +722,8 @@ function truncatePreservingMarkers(output: string): string {
   if (latestMarkerIndex !== -1) {
     const fromMarker = output.substring(latestMarkerIndex);
     if (fromMarker.length > MAX_STDOUT_SIZE) {
-      return fromMarker.substring(0, MAX_STDOUT_SIZE);
+      return fromMarker.substring(0, MAX_STDOUT_SIZE) +
+        "\n\n... (output truncated due to size limit)";
     }
     return fromMarker;
   }

@@ -240,10 +240,12 @@ class PloomyDaemon {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const currentTask = this.state.getTask(task.issueId);
+      const currentState = currentTask?.state ?? task.state;
       logger.error(`Error processing ${issueRef}.`, {
         error: message,
         issueId: task.issueId,
-        state: task.state,
+        state: currentState,
       });
       this.state.updateStateWithError(task.issueId, "FAILED", message);
     }
@@ -299,7 +301,9 @@ class PloomyDaemon {
   private async handleDrafting(item: ActionableIssue, repoDir: string): Promise<void> {
     const { issue, task } = item;
 
-    this.state.updateState(task.issueId, "DRAFTING");
+    if (task.state !== "DRAFTING") {
+      this.state.updateState(task.issueId, "DRAFTING");
+    }
 
     const draftPath = join(
       this.config.plansDir,
@@ -416,7 +420,9 @@ class PloomyDaemon {
   private async handleFinalizing(item: ActionableIssue, repoDir: string): Promise<void> {
     const { issue, task } = item;
 
-    this.state.updateState(task.issueId, "FINALIZING");
+    if (task.state !== "FINALIZING") {
+      this.state.updateState(task.issueId, "FINALIZING");
+    }
 
     const finalPath = join(
       this.config.plansDir,
