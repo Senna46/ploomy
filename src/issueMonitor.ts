@@ -103,7 +103,7 @@ export class IssueMonitor {
 
     // Failed tasks: resume from the latest phase with completed artifacts
     if (existingTask.state === "FAILED") {
-      if (existingTask.retryCount >= MAX_RETRY_COUNT) {
+      if (existingTask.retryCount > MAX_RETRY_COUNT) {
         logger.warn(
           `Issue ${issueId} exceeded max retry count (${MAX_RETRY_COUNT}). Skipping.`,
           { issueId, retryCount: existingTask.retryCount }
