@@ -5,6 +5,7 @@
 // Limitations: Relies on polling; does not use webhooks.
 
 import { existsSync } from "fs";
+import { join } from "path";
 
 import { GitHubClient } from "./githubClient.js";
 import { findNewHumanComments } from "./issueParser.js";
@@ -113,10 +114,22 @@ export class IssueMonitor {
       this.state.clearErrorMessage(issueId);
 
       let resumeState: PlanState;
-      if (existingTask.reviewOutputPath && existsSync(existingTask.reviewOutputPath)) {
+      // Check for review output both in DB and on disk at the conventional path,
+      // since a failure during handleReviewing may have written the file but not
+      // persisted the path to the DB.
+      const reviewPathOnDisk = existingTask.reviewOutputPath
+        ?? join(
+          this.config.plansDir,
+          ...existingTask.repo.split("/"),
+          `${existingTask.issueNumber}.review.txt`
+        );
+      if (existsSync(reviewPathOnDisk)) {
+        if (!existingTask.reviewOutputPath) {
+          this.state.updateReviewOutputPath(issueId, reviewPathOnDisk);
+        }
         resumeState = "FINALIZING";
       } else if (existingTask.draftPlanPath && existsSync(existingTask.draftPlanPath)) {
-        resumeState = "DRAFTING";
+        resumeState = "REVIEWING";
       } else {
         resumeState = "PENDING";
       }
