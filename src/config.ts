@@ -1,8 +1,11 @@
 // Configuration loader for Ploomy.
 // Reads PLANNER_* environment variables (with dotenv support) and validates
-// required settings. Provides sensible defaults for optional values.
+// required settings. Uses GitHub App authentication (App ID + Private Key).
+// Monitored repositories are auto-discovered from App installations.
 // Limitations: Only supports environment variable configuration,
 //   no config file support.
+
+import { readFileSync } from "fs";
 
 import { config as dotenvConfig } from "dotenv";
 import { homedir } from "os";
@@ -15,14 +18,20 @@ const VALID_LOG_LEVELS: LogLevel[] = ["debug", "info", "warn", "error"];
 export function loadConfig(): Config {
   dotenvConfig();
 
-  const githubOrgs = parseCommaSeparated(process.env.PLANNER_GITHUB_ORGS);
-  const githubRepos = parseCommaSeparated(process.env.PLANNER_GITHUB_REPOS);
-
-  if (githubOrgs.length === 0 && githubRepos.length === 0) {
+  const appIdStr = process.env.PLANNER_APP_ID?.trim();
+  if (!appIdStr) {
     throw new Error(
-      "Configuration error: At least one of PLANNER_GITHUB_ORGS or PLANNER_GITHUB_REPOS must be set."
+      "Configuration error: PLANNER_APP_ID is required."
     );
   }
+  const appId = parseInt(appIdStr, 10);
+  if (isNaN(appId) || appId <= 0) {
+    throw new Error(
+      `Configuration error: PLANNER_APP_ID must be a positive integer, got "${appIdStr}".`
+    );
+  }
+
+  const privateKey = loadPrivateKey();
 
   const issueLabel = process.env.PLANNER_ISSUE_LABEL?.trim() || "plan-request";
   const pollInterval = parsePositiveInt(process.env.PLANNER_POLL_INTERVAL, 120);
@@ -41,8 +50,8 @@ export function loadConfig(): Config {
   const logLevel = parseLogLevel(process.env.PLANNER_LOG_LEVEL);
 
   return {
-    githubOrgs,
-    githubRepos,
+    appId,
+    privateKey,
     issueLabel,
     pollInterval,
     claudeModel,
@@ -54,14 +63,28 @@ export function loadConfig(): Config {
   };
 }
 
-function parseCommaSeparated(value: string | undefined): string[] {
-  if (!value || value.trim() === "") {
-    return [];
+function loadPrivateKey(): string {
+  const privateKeyPath = process.env.PLANNER_PRIVATE_KEY_PATH?.trim();
+  const privateKeyEnv = process.env.PLANNER_PRIVATE_KEY?.trim();
+
+  if (privateKeyPath) {
+    try {
+      return readFileSync(privateKeyPath, "utf-8");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Configuration error: Failed to read private key from PLANNER_PRIVATE_KEY_PATH="${privateKeyPath}": ${message}`
+      );
+    }
   }
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
+
+  if (privateKeyEnv) {
+    return privateKeyEnv;
+  }
+
+  throw new Error(
+    "Configuration error: Either PLANNER_PRIVATE_KEY_PATH or PLANNER_PRIVATE_KEY must be set."
+  );
 }
 
 function parsePositiveInt(

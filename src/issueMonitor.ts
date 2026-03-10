@@ -1,7 +1,8 @@
 // Issue monitor for Ploomy.
-// Discovers labeled Issues across configured repositories and orgs,
-// detects new Issues and user replies to bot questions, and determines
-// which Issues need processing based on their current state.
+// Discovers labeled Issues across all repositories accessible to the
+// GitHub App installations, detects new Issues and user replies to bot
+// questions, and determines which Issues need processing based on their
+// current state.
 // Limitations: Relies on polling; does not use webhooks.
 
 import { existsSync } from "fs";
@@ -259,43 +260,21 @@ export class IssueMonitor {
   }
 
   // ============================================================
-  // Resolve target repositories from config
+  // Resolve target repositories from App installations
   // ============================================================
 
   private async resolveTargetRepos(): Promise<
     Array<{ owner: string; repo: string }>
   > {
+    const accessible = await this.github.listAccessibleRepos();
     const repos: Array<{ owner: string; repo: string }> = [];
     const seen = new Set<string>();
 
-    for (const repoSpec of this.config.githubRepos) {
-      const parts = repoSpec.split("/");
-      if (parts.length !== 2) {
-        logger.warn(`Invalid repo format: "${repoSpec}". Expected owner/repo.`);
-        continue;
-      }
-      const key = `${parts[0]}/${parts[1]}`;
+    for (const { owner, name } of accessible) {
+      const key = `${owner}/${name}`;
       if (!seen.has(key)) {
         seen.add(key);
-        repos.push({ owner: parts[0], repo: parts[1] });
-      }
-    }
-
-    for (const org of this.config.githubOrgs) {
-      try {
-        const orgRepos = await this.github.listOwnerRepos(org);
-        for (const { owner, name } of orgRepos) {
-          const key = `${owner}/${name}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            repos.push({ owner, repo: name });
-          }
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error(`Failed to list repos for org "${org}".`, {
-          error: message,
-        });
+        repos.push({ owner, repo: name });
       }
     }
 

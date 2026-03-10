@@ -14,7 +14,7 @@ target repository.
 - Language: TypeScript (ES2022, Node16 modules)
 - Runtime: Node.js >= 18
 - Package Manager: npm
-- GitHub API: Octokit (via octokit package)
+- GitHub API: Octokit (via octokit package, GitHub App authentication)
 - State: SQLite (via better-sqlite3)
 - Config: dotenv
 - Plan generation: Claude CLI (`claude -p`) with read-only tools
@@ -58,7 +58,8 @@ target repository.
 ## Key Patterns
 
 - Polling daemon: main loop with configurable sleep interval, SIGINT/SIGTERM shutdown
-- GitHub auth: GH_TOKEN env var takes priority, falls back to gh auth token CLI
+- GitHub auth: GitHub App (JWT + installation access tokens via @octokit/auth-app)
+- Repository discovery: auto-discovered from App installations (no manual repo/org list)
 - State machine: Each Issue follows PENDING → QUESTIONING → DRAFTING → REVIEWING →
   FINALIZING → DONE with AWAITING_USER loops at questioning and finalizing
 - Claude invocation: claude -p with read-only tools (no Edit), output parsed via markers
@@ -72,3 +73,4 @@ target repository.
 - Git operations have a 2-minute timeout
 - Plan files are pushed to the target repo on a dedicated branch, not main
 - Environment variables use PLANNER_ prefix (not tied to app name)
+- No dependency on gh CLI or GH_TOKEN; authentication is via GitHub App only

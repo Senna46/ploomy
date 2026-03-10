@@ -48,7 +48,7 @@ plan.md files and delivers them to the target repository.
 
 ## Key Interfaces
 
-- Config: All PLANNER_* settings from environment
+- Config: All PLANNER_* settings from environment (appId, privateKey, etc.)
 - IssueTask: Tracked Issue with state, plan paths, comment IDs
 - PlanState: State machine enum (PENDING, QUESTIONING, AWAITING_USER, etc.)
 - IssueComment: GitHub Issue comment data
@@ -63,9 +63,11 @@ After any code change:
 
 ## Environment Variables
 
-All config uses the PLANNER_ prefix. At minimum, set one of:
-- PLANNER_GITHUB_ORGS (e.g. my-org)
-- PLANNER_GITHUB_REPOS (e.g. my-org/my-repo)
+All config uses the PLANNER_ prefix. Required:
+- PLANNER_APP_ID (GitHub App ID)
+- PLANNER_PRIVATE_KEY_PATH or PLANNER_PRIVATE_KEY (GitHub App private key)
+
+Monitored repositories are auto-discovered from the App installations.
 
 ## Common Tasks
 

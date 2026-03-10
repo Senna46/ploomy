@@ -2,6 +2,8 @@
 // Orchestrates the polling loop: discovers labeled Issues, runs the
 // state machine (questioning → drafting → reviewing → finalizing),
 // and delivers final plans to target repositories.
+// Uses GitHub App authentication; monitored repositories are auto-discovered
+// from App installations.
 // Limitations: Single-threaded; processes Issues sequentially
 //   within each polling cycle. Graceful shutdown on SIGINT/SIGTERM.
 
@@ -62,8 +64,7 @@ class PloomyDaemon {
   async initialize(): Promise<void> {
     logger.info("Initializing Ploomy...");
     logger.info("Configuration loaded.", {
-      orgs: this.config.githubOrgs,
-      repos: this.config.githubRepos,
+      appId: this.config.appId,
       issueLabel: this.config.issueLabel,
       pollInterval: this.config.pollInterval,
       claudeModel: this.config.claudeModel ?? "(default)",
@@ -72,7 +73,10 @@ class PloomyDaemon {
 
     await this.verifyPrerequisites();
 
-    this.github = await GitHubClient.createFromGhCli();
+    this.github = await GitHubClient.createFromApp(
+      this.config.appId,
+      this.config.privateKey
+    );
     this.monitor = new IssueMonitor(this.github, this.state, this.config);
     this.conversation = new ConversationManager(this.github, this.state);
     this.branchManager = new PlanBranchManager(this.github);
@@ -92,22 +96,16 @@ class PloomyDaemon {
     const { promisify } = await import("util");
     const execFileAsync = promisify(execFile);
 
-    // Check GitHub authentication
-    const ghToken = process.env.GH_TOKEN;
-    if (ghToken && ghToken.trim()) {
-      logger.debug("Using GH_TOKEN environment variable for authentication.");
-    } else {
-      try {
-        const { stdout } = await execFileAsync("gh", ["auth", "status"]);
-        logger.debug("gh CLI auth status OK.", {
-          output: stdout.substring(0, 200),
-        });
-      } catch {
-        throw new Error(
-          "gh CLI is not authenticated. Set GH_TOKEN environment variable or run 'gh auth login'."
-        );
-      }
+    // Check GitHub App credentials
+    if (!this.config.appId || !this.config.privateKey) {
+      throw new Error(
+        "GitHub App credentials are missing. Set PLANNER_APP_ID and " +
+          "PLANNER_PRIVATE_KEY_PATH (or PLANNER_PRIVATE_KEY)."
+      );
     }
+    logger.debug("GitHub App credentials present.", {
+      appId: this.config.appId,
+    });
 
     // Check Claude CLI
     try {
@@ -215,7 +213,8 @@ class PloomyDaemon {
     try {
       // Clone/fetch the repo once per issue processing cycle instead of
       // repeating it in every state handler.
-      const repoDir = await ensureRepoClone(this.config.workDir, issue);
+      const gitToken = await this.github.getInstallationToken(issue.owner);
+      const repoDir = await ensureRepoClone(this.config.workDir, issue, gitToken);
 
       switch (task.state) {
         case "PENDING":

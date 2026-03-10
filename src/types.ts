@@ -9,8 +9,8 @@
 // ============================================================
 
 export interface Config {
-  githubOrgs: string[];
-  githubRepos: string[];
+  appId: number;
+  privateKey: string;
   issueLabel: string;
   pollInterval: number;
   claudeModel: string | null;
