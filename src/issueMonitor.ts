@@ -127,6 +127,20 @@ export class IssueMonitor {
         if (!existingTask.reviewOutputPath) {
           this.state.updateReviewOutputPath(issueId, reviewPathOnDisk);
         }
+        // Check for final plan both in DB and on disk at the conventional path,
+        // since a failure during handleFinalizing may have written the file but not
+        // persisted the path to the DB.
+        const finalPathOnDisk = existingTask.finalPlanPath
+          ?? join(
+            this.config.plansDir,
+            ...existingTask.repo.split("/"),
+            `${existingTask.issueNumber}.plan.md`
+          );
+        if (existsSync(finalPathOnDisk)) {
+          if (!existingTask.finalPlanPath) {
+            this.state.updateFinalPlanPath(issueId, finalPathOnDisk);
+          }
+        }
         resumeState = "FINALIZING";
       } else {
         // Check for draft plan both in DB and on disk at the conventional path,

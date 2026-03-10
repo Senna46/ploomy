@@ -623,7 +623,7 @@ function extractPlanSummary(planContent: string): string {
     summaryLines.push(line);
     lineCount++;
     if (lineCount >= maxLines && lineCount < lines.length) {
-      summaryLines.push("\n... (truncated, see full plan for details)");
+      summaryLines.push("... (truncated, see full plan for details)");
       break;
     }
   }
