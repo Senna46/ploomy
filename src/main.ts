@@ -466,8 +466,21 @@ class PloomyDaemon {
 
     this.state.updatePlanBranch(task.issueId, branchName, fileUrl);
 
-    const summary = extractPlanSummary(result.planContent);
-    await this.conversation.postFinalPlan(task, summary, fileUrl, branchName);
+    const alreadyPostedFinalPlan = allComments.some(
+      (c) =>
+        c.body.includes(PLOOMY_COMMENT_MARKER) &&
+        c.body.includes("<!-- PLOOMY_STATE: DONE -->")
+    );
+
+    if (!alreadyPostedFinalPlan) {
+      const summary = extractPlanSummary(result.planContent);
+      await this.conversation.postFinalPlan(task, summary, fileUrl, branchName);
+    } else {
+      logger.info(
+        `Final plan comment already posted for ${task.issueId}, skipping duplicate.`,
+        { issueId: task.issueId }
+      );
+    }
 
     this.state.updateState(task.issueId, "DONE");
 

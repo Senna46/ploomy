@@ -10,7 +10,6 @@ import { join } from "path";
 
 import { logger } from "./logger.js";
 import {
-  ensureRepoClone,
   formatConversationHistory,
   runClaude,
 } from "./planGenerator.js";
@@ -36,7 +35,10 @@ export class PlanFinalizer {
     outputPath: string,
     preClonedRepoDir?: string
   ): Promise<FinalizingResult> {
-    const repoDir = preClonedRepoDir ?? await ensureRepoClone(this.config.workDir, context.issue);
+    if (!preClonedRepoDir) {
+      throw new Error("runFinalization: preClonedRepoDir is required");
+    }
+    const repoDir = preClonedRepoDir;
 
     const prompt = this.buildFinalizationPrompt(context);
     const output = await runClaude(repoDir, prompt, this.config.claudeModel, "finalization");
