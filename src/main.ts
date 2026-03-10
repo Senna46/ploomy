@@ -382,13 +382,22 @@ class PloomyDaemon {
       `${issue.number}.review.txt`
     );
 
-    await this.planReviewer.reviewPlan(
-      task.draftPlanPath,
-      reviewPath,
-      repoDir
-    );
+    // If the review already exists (e.g. FAILED retry), skip re-generation.
+    if (task.reviewOutputPath && existsSync(task.reviewOutputPath)) {
+      logger.info(
+        `Review already exists for ${task.issueId}, skipping regeneration.`,
+        { reviewOutputPath: task.reviewOutputPath }
+      );
+    } else {
+      await this.planReviewer.reviewPlan(
+        task.draftPlanPath,
+        reviewPath,
+        repoDir
+      );
 
-    this.state.updateReviewOutputPath(task.issueId, reviewPath);
+      this.state.updateReviewOutputPath(task.issueId, reviewPath);
+    }
+
     this.state.updateState(task.issueId, "FINALIZING");
 
     await this.handleFinalizing({
