@@ -128,10 +128,24 @@ export class IssueMonitor {
           this.state.updateReviewOutputPath(issueId, reviewPathOnDisk);
         }
         resumeState = "FINALIZING";
-      } else if (existingTask.draftPlanPath && existsSync(existingTask.draftPlanPath)) {
-        resumeState = "REVIEWING";
       } else {
-        resumeState = "PENDING";
+        // Check for draft plan both in DB and on disk at the conventional path,
+        // since a failure during handleDrafting may have written the file but not
+        // persisted the path to the DB.
+        const draftPathOnDisk = existingTask.draftPlanPath
+          ?? join(
+            this.config.plansDir,
+            ...existingTask.repo.split("/"),
+            `${existingTask.issueNumber}.draft.plan.md`
+          );
+        if (existsSync(draftPathOnDisk)) {
+          if (!existingTask.draftPlanPath) {
+            this.state.updateDraftPlanPath(issueId, draftPathOnDisk);
+          }
+          resumeState = "REVIEWING";
+        } else {
+          resumeState = "PENDING";
+        }
       }
 
       this.state.updateState(issueId, resumeState);

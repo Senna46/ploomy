@@ -488,10 +488,17 @@ class PloomyDaemon {
     );
 
     if (result.hasQuestions && result.questions) {
+      // Re-fetch comments after finalization (which can take 10+ minutes)
+      // so that users who commented during finalization are @-mentioned.
+      const freshCommentsForQuestions = await this.github.getIssueComments(
+        issue.owner,
+        issue.repo,
+        issue.number
+      );
       await this.conversation.postQuestions(
         task,
         result.questions,
-        allComments,
+        freshCommentsForQuestions,
         "AWAITING_USER_FINAL"
       );
       return;
