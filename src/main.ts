@@ -402,6 +402,62 @@ class PloomyDaemon {
 
     this.state.updateState(task.issueId, "FINALIZING");
 
+    const finalPath = join(
+      this.config.plansDir,
+      issue.owner,
+      issue.repo,
+      `${issue.number}.plan.md`
+    );
+
+    // If the final plan already exists (e.g. FAILED retry), skip re-generation.
+    if (task.finalPlanPath && existsSync(task.finalPlanPath)) {
+      logger.info(
+        `Final plan already exists for ${task.issueId}, skipping regeneration.`,
+        { finalPlanPath: task.finalPlanPath }
+      );
+
+      const existingFinalPlan = await readFile(task.finalPlanPath, "utf-8");
+
+      const { branchName, fileUrl } = await this.branchManager.pushPlanFile(
+        issue.owner,
+        issue.repo,
+        issue.number,
+        existingFinalPlan,
+        false
+      );
+
+      this.state.updatePlanBranch(task.issueId, branchName, fileUrl);
+
+      const freshComments = await this.github.getIssueComments(
+        issue.owner,
+        issue.repo,
+        issue.number
+      );
+      const alreadyPostedFinalPlan = freshComments.some(
+        (c) =>
+          c.body.includes(PLOOMY_COMMENT_MARKER) &&
+          c.body.includes("<!-- PLOOMY_STATE: DONE -->")
+      );
+
+      if (!alreadyPostedFinalPlan) {
+        const summary = extractPlanSummary(existingFinalPlan);
+        await this.conversation.postFinalPlan(task, summary, fileUrl, branchName);
+      } else {
+        logger.info(
+          `Final plan comment already posted for ${task.issueId}, skipping duplicate.`,
+          { issueId: task.issueId }
+        );
+      }
+
+      this.state.updateState(task.issueId, "DONE");
+
+      logger.info(
+        `Plan complete for ${issue.owner}/${issue.repo}#${issue.number}.`,
+        { issueId: task.issueId, planFileUrl: fileUrl }
+      );
+      return;
+    }
+
     const allComments = await this.github.getIssueComments(
       issue.owner,
       issue.repo,
@@ -424,13 +480,6 @@ class PloomyDaemon {
       draftPlan,
       reviewOutput,
     };
-
-    const finalPath = join(
-      this.config.plansDir,
-      issue.owner,
-      issue.repo,
-      `${issue.number}.plan.md`
-    );
 
     const result = await this.planFinalizer.runFinalization(
       context,
@@ -466,7 +515,15 @@ class PloomyDaemon {
 
     this.state.updatePlanBranch(task.issueId, branchName, fileUrl);
 
-    const alreadyPostedFinalPlan = allComments.some(
+    // Re-fetch comments after finalization (which can take 10+ minutes)
+    // to avoid stale duplicate detection.
+    const freshComments = await this.github.getIssueComments(
+      issue.owner,
+      issue.repo,
+      issue.number
+    );
+
+    const alreadyPostedFinalPlan = freshComments.some(
       (c) =>
         c.body.includes(PLOOMY_COMMENT_MARKER) &&
         c.body.includes("<!-- PLOOMY_STATE: DONE -->")
