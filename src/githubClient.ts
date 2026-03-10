@@ -4,8 +4,6 @@
 // for repo-specific API calls and git operations.
 // Limitations: Rate limiting is handled by Octokit built-in throttling.
 //   Contents API file operations are limited to files under 100MB.
-//   Installation map is loaded at startup; restart daemon to pick up
-//   newly added App installations.
 
 import { App, Octokit } from "octokit";
 
@@ -97,6 +95,10 @@ export class GitHubClient {
   async listAccessibleRepos(): Promise<
     Array<{ owner: string; name: string }>
   > {
+    // Refresh installations so that accounts added after startup are
+    // present in installationMap before we iterate their repositories.
+    await this.loadInstallations();
+
     const repos: Array<{ owner: string; name: string }> = [];
 
     for await (const { repository } of this.app.eachRepository.iterator()) {
