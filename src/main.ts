@@ -440,15 +440,29 @@ class PloomyDaemon {
 
       const existingFinalPlan = await readFile(task.finalPlanPath, "utf-8");
 
-      const { branchName, fileUrl } = await this.branchManager.pushPlanFile(
-        issue.owner,
-        issue.repo,
-        issue.number,
-        existingFinalPlan,
-        false
-      );
+      let branchName: string;
+      let fileUrl: string;
 
-      this.state.updatePlanBranch(task.issueId, branchName, fileUrl);
+      if (task.planBranch && task.planFileUrl) {
+        // Plan was already pushed in a prior attempt; skip redundant push.
+        branchName = task.planBranch;
+        fileUrl = task.planFileUrl;
+        logger.info(
+          `Plan already pushed for ${task.issueId}, skipping redundant push.`,
+          { planBranch: branchName, planFileUrl: fileUrl }
+        );
+      } else {
+        const pushResult = await this.branchManager.pushPlanFile(
+          issue.owner,
+          issue.repo,
+          issue.number,
+          existingFinalPlan,
+          false
+        );
+        branchName = pushResult.branchName;
+        fileUrl = pushResult.fileUrl;
+        this.state.updatePlanBranch(task.issueId, branchName, fileUrl);
+      }
 
       const freshComments = await this.github.getIssueComments(
         issue.owner,

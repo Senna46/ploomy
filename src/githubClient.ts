@@ -365,8 +365,8 @@ function validateGitHubToken(token: string): void {
     token.startsWith(prefix)
   );
   if (!hasValidPrefix) {
-    throw new Error(
-      `Invalid GH_TOKEN format. GitHub tokens should start with one of: ${validPrefixes.join(", ")}`
+    logger.warn(
+      `GH_TOKEN does not match known GitHub token prefixes (${validPrefixes.join(", ")}). Proceeding anyway — Octokit will validate the token via the API.`
     );
   }
 }
