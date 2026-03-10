@@ -301,12 +301,17 @@ class PloomyDaemon {
     );
 
     // If the draft already exists (e.g. FAILED retry), skip re-generation
-    // and the duplicate summary comment — go straight to review.
+    // but still post the summary — it may not have been posted if the
+    // previous attempt failed during postDraftSummary.
     if (task.draftPlanPath && existsSync(task.draftPlanPath)) {
       logger.info(
-        `Draft already exists for ${task.issueId}, skipping to review.`,
+        `Draft already exists for ${task.issueId}, skipping regeneration.`,
         { draftPlanPath: task.draftPlanPath }
       );
+      const existingDraft = await readFile(task.draftPlanPath, "utf-8");
+      const summary = extractPlanSummary(existingDraft);
+      await this.conversation.postDraftSummary(task, summary);
+
       this.state.updateState(task.issueId, "REVIEWING");
       await this.handleReviewing({
         ...item,
