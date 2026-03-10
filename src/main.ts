@@ -96,16 +96,8 @@ class PloomyDaemon {
     const { promisify } = await import("util");
     const execFileAsync = promisify(execFile);
 
-    // Check GitHub App credentials
-    if (!this.config.appId || !this.config.privateKey) {
-      throw new Error(
-        "GitHub App credentials are missing. Set PLANNER_APP_ID and " +
-          "PLANNER_PRIVATE_KEY_PATH (or PLANNER_PRIVATE_KEY)."
-      );
-    }
-    logger.debug("GitHub App credentials present.", {
-      appId: this.config.appId,
-    });
+    // Note: GitHub App credentials (appId, privateKey) are validated by
+    // loadConfig() before the daemon is constructed, so no check is needed here.
 
     // Check Claude CLI
     try {
