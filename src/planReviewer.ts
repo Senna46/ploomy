@@ -50,19 +50,20 @@ export class PlanReviewer {
       "## Plan to review\n\n" +
       planContent;
 
-    const args = [
-      "exec",
-      "-m",
-      this.config.codexModel,
+    const args = ["exec"];
+    if (this.config.codexModel) {
+      args.push("-m", this.config.codexModel);
+    }
+    args.push(
       "-s",
       "read-only",
       "--output-last-message",
       outputMessagePath,
-      "-",
-    ];
+      "-"
+    );
 
     logger.info("Running codex exec for plan review...", {
-      codexModel: this.config.codexModel,
+      codexModel: this.config.codexModel ?? "(default)",
       draftPlanPath,
     });
 

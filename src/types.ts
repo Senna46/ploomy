@@ -14,7 +14,7 @@ export interface Config {
   issueLabel: string;
   pollInterval: number;
   claudeModel: string | null;
-  codexModel: string;
+  codexModel: string | null;
   workDir: string;
   dbPath: string;
   plansDir: string;
