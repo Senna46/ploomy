@@ -21,6 +21,7 @@ import { loadConfig } from "./config.js";
 import { ConversationManager } from "./conversationManager.js";
 import { GitHubClient } from "./githubClient.js";
 import { IssueMonitor } from "./issueMonitor.js";
+import { PLOOMY_COMMENT_MARKER } from "./issueParser.js";
 import { logger, setLogLevel } from "./logger.js";
 import { PlanBranchManager } from "./planBranchManager.js";
 import { PlanFinalizer } from "./planFinalizer.js";
@@ -300,17 +301,35 @@ class PloomyDaemon {
       `${issue.number}.draft.plan.md`
     );
 
-    // If the draft already exists (e.g. FAILED retry), skip re-generation
-    // but still post the summary — it may not have been posted if the
-    // previous attempt failed during postDraftSummary.
+    // If the draft already exists (e.g. FAILED retry), skip re-generation.
+    // Only post the summary if it was not already posted in a prior attempt.
     if (task.draftPlanPath && existsSync(task.draftPlanPath)) {
       logger.info(
         `Draft already exists for ${task.issueId}, skipping regeneration.`,
         { draftPlanPath: task.draftPlanPath }
       );
-      const existingDraft = await readFile(task.draftPlanPath, "utf-8");
-      const summary = extractPlanSummary(existingDraft);
-      await this.conversation.postDraftSummary(task, summary);
+
+      const existingComments = await this.github.getIssueComments(
+        issue.owner,
+        issue.repo,
+        issue.number
+      );
+      const alreadyPostedDraftSummary = existingComments.some(
+        (c) =>
+          c.body.includes(PLOOMY_COMMENT_MARKER) &&
+          c.body.includes("<!-- PLOOMY_STATE: REVIEWING -->")
+      );
+
+      if (!alreadyPostedDraftSummary) {
+        const existingDraft = await readFile(task.draftPlanPath, "utf-8");
+        const summary = extractPlanSummary(existingDraft);
+        await this.conversation.postDraftSummary(task, summary);
+      } else {
+        logger.info(
+          `Draft summary already posted for ${task.issueId}, skipping duplicate.`,
+          { issueId: task.issueId }
+        );
+      }
 
       this.state.updateState(task.issueId, "REVIEWING");
       await this.handleReviewing({
