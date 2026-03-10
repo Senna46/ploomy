@@ -27,8 +27,7 @@ export function loadConfig(): Config {
   const issueLabel = process.env.PLANNER_ISSUE_LABEL?.trim() || "plan-request";
   const pollInterval = parsePositiveInt(process.env.PLANNER_POLL_INTERVAL, 120);
   const claudeModel = process.env.PLANNER_CLAUDE_MODEL?.trim() || null;
-  const codexModel =
-    process.env.PLANNER_CODEX_MODEL?.trim() || "gpt-5.3-codex";
+  const codexModel = process.env.PLANNER_CODEX_MODEL?.trim() || null;
 
   const defaultWorkDir = join(homedir(), ".ploomy", "repos");
   const workDir = process.env.PLANNER_WORK_DIR?.trim() || defaultWorkDir;

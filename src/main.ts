@@ -67,7 +67,7 @@ class PloomyDaemon {
       issueLabel: this.config.issueLabel,
       pollInterval: this.config.pollInterval,
       claudeModel: this.config.claudeModel ?? "(default)",
-      codexModel: this.config.codexModel,
+      codexModel: this.config.codexModel ?? "(default)",
     });
 
     await this.verifyPrerequisites();

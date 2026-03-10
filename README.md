@@ -41,6 +41,17 @@ npm start
 npm run dev
 ```
 
+## Running as a daemon (macOS)
+
+To run Ploomy as a native LaunchAgent (starts on login, restarts on failure), see [deploy/README.md](deploy/README.md). From the project root:
+
+```bash
+chmod +x deploy/install-daemon.sh
+./deploy/install-daemon.sh
+```
+
+Logs: `~/.ploomy/logs/daemon.log` and `~/.ploomy/logs/daemon.err.log`.
+
 ## Configuration
 
 All configuration uses the `PLANNER_` prefix (not tied to the app name):
@@ -52,7 +63,7 @@ All configuration uses the `PLANNER_` prefix (not tied to the app name):
 | `PLANNER_ISSUE_LABEL` | Label that triggers plan generation | `plan-request` |
 | `PLANNER_POLL_INTERVAL` | Polling interval in seconds | `120` |
 | `PLANNER_CLAUDE_MODEL` | Claude model override | (claude CLI default) |
-| `PLANNER_CODEX_MODEL` | Codex model override | `gpt-5.3-codex` |
+| `PLANNER_CODEX_MODEL` | Codex model override | (codex CLI default) |
 | `PLANNER_WORK_DIR` | Working directory for cloned repos | `~/.ploomy/repos` |
 | `PLANNER_DB_PATH` | SQLite database path | `~/.ploomy/state.db` |
 | `PLANNER_PLANS_DIR` | Local plan file storage | `~/.ploomy/plans` |
