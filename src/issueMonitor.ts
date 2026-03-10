@@ -127,6 +127,20 @@ export class IssueMonitor {
         if (!existingTask.reviewOutputPath) {
           this.state.updateReviewOutputPath(issueId, reviewPathOnDisk);
         }
+        // Also recover draftPlanPath if it was lost from the DB, since
+        // handleFinalizing needs it to build the finalization prompt with
+        // the original draft context.
+        const draftPathOnDisk = existingTask.draftPlanPath
+          ?? join(
+            this.config.plansDir,
+            ...existingTask.repo.split("/"),
+            `${existingTask.issueNumber}.draft.plan.md`
+          );
+        if (existsSync(draftPathOnDisk)) {
+          if (!existingTask.draftPlanPath) {
+            this.state.updateDraftPlanPath(issueId, draftPathOnDisk);
+          }
+        }
         // Check for final plan both in DB and on disk at the conventional path,
         // since a failure during handleFinalizing may have written the file but not
         // persisted the path to the DB.
