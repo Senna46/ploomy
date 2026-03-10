@@ -274,10 +274,17 @@ class PloomyDaemon {
     const result = await this.planGenerator.runQuestioning(context, repoDir);
 
     if (result.hasQuestions && result.questions) {
+      // Re-fetch comments after runQuestioning (which can take 10+ minutes)
+      // so that users who commented during the Claude run are @-mentioned.
+      const freshComments = await this.github.getIssueComments(
+        issue.owner,
+        issue.repo,
+        issue.number
+      );
       await this.conversation.postQuestions(
         task,
         result.questions,
-        allComments,
+        freshComments,
         "AWAITING_USER"
       );
     } else {
