@@ -536,7 +536,7 @@ function extractPlanSummary(planContent: string): string {
   for (const line of lines) {
     summaryLines.push(line);
     lineCount++;
-    if (lineCount >= maxLines) {
+    if (lineCount >= maxLines && lineCount < lines.length) {
       summaryLines.push("\n... (truncated, see full plan for details)");
       break;
     }
