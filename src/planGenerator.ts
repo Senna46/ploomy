@@ -550,7 +550,7 @@ export async function ensureRepoClone(
         { cwd: repoDir, timeout: 30_000 }
       ).catch((err) => {
         logger.warn("git remote set-head --auto failed, will try fallback.", {
-          error: err instanceof Error ? err.message : String(err),
+          error: sanitizeGitError(err),
         });
       });
 
