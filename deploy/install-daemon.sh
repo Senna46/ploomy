@@ -20,8 +20,15 @@ if [ ! -f "$PROJECT_ROOT/.env" ]; then
   echo "Warning: .env not found. Copy .env.example to .env and configure."
 fi
 
+NODE_PATH="$(command -v node)"
+if [ -z "$NODE_PATH" ]; then
+  echo "Error: node not found on PATH. Install Node.js first."
+  exit 1
+fi
+
 mkdir -p "$LOG_DIR"
-sed -e "s|__PROJECT_ROOT__|$PROJECT_ROOT|g" -e "s|__HOME__|$HOME|g" \
+mkdir -p "$LAUNCH_AGENTS"
+sed -e "s|__PROJECT_ROOT__|$PROJECT_ROOT|g" -e "s|__HOME__|$HOME|g" -e "s|__NODE_PATH__|$NODE_PATH|g" \
   "$SCRIPT_DIR/ploomy-daemon.plist" > "$PLIST_DEST"
 chmod 644 "$PLIST_DEST"
 
