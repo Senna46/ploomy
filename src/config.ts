@@ -69,8 +69,17 @@ function loadPrivateKey(): string {
 
   if (privateKeyPath) {
     try {
-      return readFileSync(privateKeyPath, "utf-8");
+      const content = readFileSync(privateKeyPath, "utf-8").trim();
+      if (!content) {
+        throw new Error(
+          `Configuration error: Private key file at PLANNER_PRIVATE_KEY_PATH="${privateKeyPath}" is empty.`
+        );
+      }
+      return content;
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Configuration error:")) {
+        throw error;
+      }
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(
         `Configuration error: Failed to read private key from PLANNER_PRIVATE_KEY_PATH="${privateKeyPath}": ${message}`
