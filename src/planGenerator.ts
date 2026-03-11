@@ -3,6 +3,7 @@
 // the DRAFTING phase (generating the implementation plan) using Claude CLI.
 // Clones the target repository locally and runs claude -p with read-only
 // tools so the codebase can be explored without modification.
+// Uses GitHub App installation tokens for git authentication.
 // Limitations: Requires claude CLI with push access to nothing.
 //   Output parsing depends on QUESTIONS:/READY/PLAN_CONTENT: markers.
 //   10-minute timeout per claude -p invocation.
@@ -526,19 +527,18 @@ export async function runClaude(
 
 export async function ensureRepoClone(
   workDir: string,
-  issue: { owner: string; repo: string }
+  issue: { owner: string; repo: string },
+  gitToken?: string
 ): Promise<string> {
   mkdirSync(workDir, { recursive: true });
 
   const repoDir = join(workDir, issue.owner, issue.repo);
   const cloneUrl = `https://github.com/${issue.owner}/${issue.repo}.git`;
-  const authHeader = await buildGitAuthHeader();
-  const authArgs = authHeader ? ["-c", `http.extraheader=${authHeader}`] : [];
+  const authArgs = buildGitAuthArgs(gitToken);
 
   try {
     if (existsSync(join(repoDir, ".git"))) {
       logger.debug("Fetching latest for existing clone.", { repoDir });
-      // Ensure the remote URL does not contain embedded tokens
       await execFileAsync("git", ["remote", "set-url", "origin", cloneUrl], {
         cwd: repoDir,
         timeout: 30_000,
@@ -547,9 +547,6 @@ export async function ensureRepoClone(
         cwd: repoDir,
         timeout: 2 * 60 * 1000,
       });
-      // Update origin/HEAD to match the remote's current default branch.
-      // This handles renamed default branches (e.g. master → main) whose
-      // stale refs were removed by fetch --prune.
       await execFileAsync(
         "git",
         [...authArgs, "remote", "set-head", "origin", "--auto"],
@@ -560,7 +557,6 @@ export async function ensureRepoClone(
         });
       });
 
-      // Read the (now-refreshed) symbolic ref for origin/HEAD
       let resetTarget = "";
       try {
         const { stdout: defaultRef } = await execFileAsync(
@@ -570,7 +566,6 @@ export async function ensureRepoClone(
         );
         resetTarget = defaultRef.trim();
       } catch {
-        // symbolic-ref failed; discover default branch via ls-remote
         try {
           const { stdout: lsRemote } = await execFileAsync(
             "git",
@@ -587,7 +582,6 @@ export async function ensureRepoClone(
       }
 
       if (!resetTarget) {
-        // Absolute fallback: use the first remote branch found
         const { stdout: branchList } = await execFileAsync(
           "git",
           ["branch", "-r", "--list", "origin/*", "--sort=-committerdate"],
@@ -627,25 +621,12 @@ export async function ensureRepoClone(
   return repoDir;
 }
 
-async function buildGitAuthHeader(): Promise<string | null> {
-  const envToken = process.env.GH_TOKEN?.trim();
-  if (envToken) {
-    const encoded = Buffer.from(`x-access-token:${envToken}`).toString("base64");
-    return `Authorization: basic ${encoded}`;
+function buildGitAuthArgs(token?: string): string[] {
+  if (!token) {
+    return [];
   }
-
-  try {
-    const { stdout } = await execFileAsync("gh", ["auth", "token"]);
-    const token = stdout.trim();
-    if (token) {
-      const encoded = Buffer.from(`x-access-token:${token}`).toString("base64");
-      return `Authorization: basic ${encoded}`;
-    }
-  } catch {
-    logger.debug("Could not obtain token from gh CLI for git auth header.");
-  }
-
-  return null;
+  const encoded = Buffer.from(`x-access-token:${token}`).toString("base64");
+  return ["-c", `http.extraheader=Authorization: basic ${encoded}`];
 }
 
 function sanitizeGitError(error: unknown): string {

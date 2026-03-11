@@ -4,7 +4,7 @@ Run Ploomy as a native macOS LaunchAgent so it starts on login and restarts on f
 
 ## Prerequisites
 
-- `.env` configured (copy from `.env.example` and set `PLANNER_GITHUB_ORGS` or `PLANNER_GITHUB_REPOS`, tokens, etc.)
+- `.env` configured (copy from `.env.example` and set `PLANNER_APP_ID`, `PLANNER_PRIVATE_KEY_PATH`, etc.)
 - `npm run build` completed
 - `claude` and `codex` CLIs installed and on PATH (`~/.local/bin` is included by default)
 

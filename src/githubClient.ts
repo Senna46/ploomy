@@ -1,112 +1,167 @@
 // GitHub API client for Ploomy.
-// Wraps Octokit to provide typed operations for monitoring Issues,
-// managing comments, creating branches, and pushing files via Contents API.
-// Uses gh CLI auth token or GH_TOKEN for authentication.
+// Uses GitHub App authentication with per-installation Octokit instances.
+// Manages JWT auth for app-level operations and installation access tokens
+// for repo-specific API calls and git operations.
 // Limitations: Rate limiting is handled by Octokit built-in throttling.
 //   Contents API file operations are limited to files under 100MB.
 
-import { execFile } from "child_process";
-import { Octokit } from "octokit";
-import { promisify } from "util";
+import { App, Octokit } from "octokit";
 
 import { logger } from "./logger.js";
 import type { GitHubIssue, IssueComment } from "./types.js";
 
-const execFileAsync = promisify(execFile);
-
 export class GitHubClient {
-  private octokit: Octokit;
+  private app: App;
+  private appSlug: string;
+  private botUserId: number;
+  private installationMap: Map<string, number>;
+  private octokitCache: Map<number, Octokit>;
 
-  constructor(token?: string) {
-    this.octokit = new Octokit({
-      auth: token,
+  private constructor(app: App, appSlug: string, botUserId: number) {
+    this.app = app;
+    this.appSlug = appSlug;
+    this.botUserId = botUserId;
+    this.installationMap = new Map();
+    this.octokitCache = new Map();
+  }
+
+  // ============================================================
+  // Factory: Create client from GitHub App credentials
+  // ============================================================
+
+  static async createFromApp(
+    appId: number,
+    privateKey: string
+  ): Promise<GitHubClient> {
+    const app = new App({ appId, privateKey });
+
+    const client = new GitHubClient(app, `app-${appId}`, 0);
+    await client.loadInstallations();
+    await client.resolveBotIdentity();
+    return client;
+  }
+
+  private async resolveBotIdentity(): Promise<void> {
+    const firstInstallationId = this.installationMap.values().next().value;
+    if (firstInstallationId === undefined) return;
+
+    const octokit = await this.getInstallationOctokit(firstInstallationId);
+
+    try {
+      const { data: appInfo } = await octokit.rest.apps.getAuthenticated();
+      this.appSlug = appInfo?.slug ?? this.appSlug;
+    } catch (error) {
+      logger.warn("Failed to fetch app slug, using fallback.", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    try {
+      const { data: botUser } = await octokit.rest.users.getByUsername({
+        username: `${this.appSlug}[bot]`,
+      });
+      this.botUserId = botUser.id;
+    } catch (error) {
+      logger.warn("Failed to fetch bot user ID, commits may not show app avatar.", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    logger.info("Bot identity resolved.", {
+      appSlug: this.appSlug,
+      botUserId: this.botUserId,
     });
   }
 
-  // ============================================================
-  // Factory: Create client using gh CLI auth token or GH_TOKEN
-  // ============================================================
-
-  static async createFromGhCli(): Promise<GitHubClient> {
-    const envToken = process.env.GH_TOKEN;
-    if (envToken && envToken.trim()) {
-      const trimmedToken = envToken.trim();
-      validateGitHubToken(trimmedToken);
-      logger.info(
-        "GitHub client authenticated via GH_TOKEN environment variable."
-      );
-      return new GitHubClient(trimmedToken);
-    }
-
-    try {
-      const { stdout } = await execFileAsync("gh", ["auth", "token"]);
-      const token = stdout.trim();
-      if (!token) {
-        throw new Error("gh auth token returned empty string.");
-      }
-      logger.info("GitHub client authenticated via gh CLI.");
-      return new GitHubClient(token);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(
-        `Failed to get GitHub token. Set GH_TOKEN environment variable or run 'gh auth login'. Error: ${message}`
-      );
-    }
+  private async getInstallationOctokit(installationId: number): Promise<Octokit> {
+    const cached = this.octokitCache.get(installationId);
+    if (cached) return cached;
+    const octokit = await this.app.getInstallationOctokit(installationId);
+    this.octokitCache.set(installationId, octokit as Octokit);
+    return octokit as Octokit;
   }
 
   // ============================================================
-  // Organization / User repo listing
+  // Installation management
   // ============================================================
 
-  async listOwnerRepos(
-    owner: string
-  ): Promise<Array<{ owner: string; name: string }>> {
-    logger.debug("Listing repos for owner.", { owner });
+  private async loadInstallations(): Promise<void> {
+    this.installationMap.clear();
+    this.octokitCache.clear();
+
+    for await (const { installation } of this.app.eachInstallation.iterator()) {
+      const login = installation.account?.login;
+      if (login) {
+        this.installationMap.set(login.toLowerCase(), installation.id);
+        logger.info(
+          `Found GitHub App installation for "${login}" (ID: ${installation.id}).`
+        );
+      }
+    }
+
+    if (this.installationMap.size === 0) {
+      throw new Error(
+        "No GitHub App installations found. Ensure the App is installed on at least one organization or user account."
+      );
+    }
+
+    logger.info(
+      `Loaded ${this.installationMap.size} GitHub App installation(s).`
+    );
+  }
+
+  private getInstallationId(owner: string): number {
+    const id = this.installationMap.get(owner.toLowerCase());
+    if (id === undefined) {
+      throw new Error(
+        `No GitHub App installation found for owner "${owner}". ` +
+          "Ensure the GitHub App is installed on this account."
+      );
+    }
+    return id;
+  }
+
+  private async getOctokitForOwner(owner: string): Promise<Octokit> {
+    const installationId = this.getInstallationId(owner);
+    return this.getInstallationOctokit(installationId);
+  }
+
+  // ============================================================
+  // Repository auto-discovery from App installations
+  // ============================================================
+
+  async listAccessibleRepos(): Promise<
+    Array<{ owner: string; name: string }>
+  > {
+    // Refresh installations so that accounts added after startup are
+    // present in installationMap before we iterate their repositories.
+    await this.loadInstallations();
 
     const repos: Array<{ owner: string; name: string }> = [];
 
-    try {
-      for await (const response of this.octokit.paginate.iterator(
-        this.octokit.rest.repos.listForOrg,
-        { org: owner, per_page: 100, type: "all" }
-      )) {
-        for (const repo of response.data) {
-          repos.push({ owner, name: repo.name });
-        }
-      }
-      logger.debug(`Found ${repos.length} repo(s) for org "${owner}".`);
-      return repos;
-    } catch (orgError) {
-      logger.debug(
-        `Failed to list repos as org "${owner}", trying as user...`,
-        {
-          error:
-            orgError instanceof Error ? orgError.message : String(orgError),
-        }
-      );
+    for await (const { repository } of this.app.eachRepository.iterator()) {
+      repos.push({ owner: repository.owner.login, name: repository.name });
     }
 
-    try {
-      for await (const response of this.octokit.paginate.iterator(
-        this.octokit.rest.repos.listForUser,
-        { username: owner, per_page: 100, type: "owner" }
-      )) {
-        for (const repo of response.data) {
-          repos.push({ owner, name: repo.name });
-        }
-      }
-      logger.debug(`Found ${repos.length} repo(s) for user "${owner}".`);
-    } catch (userError) {
-      logger.error(
-        `Failed to list repos for "${owner}" as both org and user.`,
-        {
-          error:
-            userError instanceof Error ? userError.message : String(userError),
-        }
-      );
-    }
-
+    logger.info(
+      `Found ${repos.length} accessible repository/repositories across all installations.`
+    );
     return repos;
+  }
+
+  // ============================================================
+  // Installation access token (for git clone/push operations)
+  // ============================================================
+
+  async getInstallationToken(owner: string): Promise<string> {
+    const installationId = this.getInstallationId(owner);
+
+    const { data } =
+      await this.app.octokit.rest.apps.createInstallationAccessToken({
+        installation_id: installationId,
+      });
+
+    return data.token;
   }
 
   // ============================================================
@@ -120,10 +175,11 @@ export class GitHubClient {
   ): Promise<GitHubIssue[]> {
     logger.debug("Fetching labeled Issues.", { owner, repo, label });
 
+    const octokit = await this.getOctokitForOwner(owner);
     const issues: GitHubIssue[] = [];
 
-    for await (const response of this.octokit.paginate.iterator(
-      this.octokit.rest.issues.listForRepo,
+    for await (const response of octokit.paginate.iterator(
+      octokit.rest.issues.listForRepo,
       {
         owner,
         repo,
@@ -133,7 +189,6 @@ export class GitHubClient {
       }
     )) {
       for (const issue of response.data) {
-        // Skip pull requests (Issues API includes PRs)
         if (issue.pull_request) continue;
 
         issues.push({
@@ -179,6 +234,7 @@ export class GitHubClient {
       since: since ?? "(all)",
     });
 
+    const octokit = await this.getOctokitForOwner(owner);
     const comments: IssueComment[] = [];
 
     const params: {
@@ -197,8 +253,8 @@ export class GitHubClient {
       params.since = since;
     }
 
-    for await (const response of this.octokit.paginate.iterator(
-      this.octokit.rest.issues.listComments,
+    for await (const response of octokit.paginate.iterator(
+      octokit.rest.issues.listComments,
       params
     )) {
       for (const comment of response.data) {
@@ -223,7 +279,8 @@ export class GitHubClient {
   ): Promise<number> {
     logger.debug("Creating Issue comment.", { owner, repo, issueNumber });
 
-    const { data } = await this.octokit.rest.issues.createComment({
+    const octokit = await this.getOctokitForOwner(owner);
+    const { data } = await octokit.rest.issues.createComment({
       owner,
       repo,
       issue_number: issueNumber,
@@ -238,13 +295,14 @@ export class GitHubClient {
   // ============================================================
 
   async getDefaultBranchSha(owner: string, repo: string): Promise<string> {
-    const { data: repoData } = await this.octokit.rest.repos.get({
+    const octokit = await this.getOctokitForOwner(owner);
+    const { data: repoData } = await octokit.rest.repos.get({
       owner,
       repo,
     });
     const defaultBranch = repoData.default_branch;
 
-    const { data: refData } = await this.octokit.rest.git.getRef({
+    const { data: refData } = await octokit.rest.git.getRef({
       owner,
       repo,
       ref: `heads/${defaultBranch}`,
@@ -258,8 +316,9 @@ export class GitHubClient {
     repo: string,
     branch: string
   ): Promise<string | null> {
+    const octokit = await this.getOctokitForOwner(owner);
     try {
-      const { data } = await this.octokit.rest.git.getRef({
+      const { data } = await octokit.rest.git.getRef({
         owner,
         repo,
         ref: `heads/${branch}`,
@@ -281,7 +340,8 @@ export class GitHubClient {
   ): Promise<void> {
     logger.debug("Creating branch.", { owner, repo, branchName, fromSha });
 
-    await this.octokit.rest.git.createRef({
+    const octokit = await this.getOctokitForOwner(owner);
+    await octokit.rest.git.createRef({
       owner,
       repo,
       ref: `refs/heads/${branchName}`,
@@ -310,9 +370,10 @@ export class GitHubClient {
       filePath,
     });
 
+    const octokit = await this.getOctokitForOwner(owner);
     let existingSha: string | undefined;
     try {
-      const { data: existing } = await this.octokit.rest.repos.getContent({
+      const { data: existing } = await octokit.rest.repos.getContent({
         owner,
         repo,
         path: filePath,
@@ -329,7 +390,12 @@ export class GitHubClient {
 
     const encodedContent = Buffer.from(content, "utf-8").toString("base64");
 
-    const { data } = await this.octokit.rest.repos.createOrUpdateFileContents({
+    const botAuthor = {
+      name: `${this.appSlug}[bot]`,
+      email: `${this.botUserId}+${this.appSlug}[bot]@users.noreply.github.com`,
+    };
+
+    const { data } = await octokit.rest.repos.createOrUpdateFileContents({
       owner,
       repo,
       path: filePath,
@@ -337,6 +403,8 @@ export class GitHubClient {
       content: encodedContent,
       branch,
       sha: existingSha,
+      author: botAuthor,
+      committer: botAuthor,
     });
 
     const commitSha = data.commit.sha ?? "unknown";
@@ -351,25 +419,6 @@ export class GitHubClient {
 // ============================================================
 // Utilities
 // ============================================================
-
-function validateGitHubToken(token: string): void {
-  const validPrefixes = [
-    "ghp_",
-    "gho_",
-    "ghu_",
-    "ghs_",
-    "ghr_",
-    "github_pat_",
-  ];
-  const hasValidPrefix = validPrefixes.some((prefix) =>
-    token.startsWith(prefix)
-  );
-  if (!hasValidPrefix) {
-    logger.warn(
-      `GH_TOKEN does not match known GitHub token prefixes (${validPrefixes.join(", ")}). Proceeding anyway — Octokit will validate the token via the API.`
-    );
-  }
-}
 
 function isNotFoundError(error: unknown): boolean {
   if (
