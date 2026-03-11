@@ -12,11 +12,13 @@ import type { GitHubIssue, IssueComment } from "./types.js";
 
 export class GitHubClient {
   private app: App;
+  private appId: number;
   private installationMap: Map<string, number>;
   private octokitCache: Map<number, Octokit>;
 
-  private constructor(app: App) {
+  private constructor(app: App, appId: number) {
     this.app = app;
+    this.appId = appId;
     this.installationMap = new Map();
     this.octokitCache = new Map();
   }
@@ -30,7 +32,7 @@ export class GitHubClient {
     privateKey: string
   ): Promise<GitHubClient> {
     const app = new App({ appId, privateKey });
-    const client = new GitHubClient(app);
+    const client = new GitHubClient(app, appId);
     await client.loadInstallations();
     return client;
   }
@@ -352,6 +354,12 @@ export class GitHubClient {
 
     const encodedContent = Buffer.from(content, "utf-8").toString("base64");
 
+    const appSlug = "senna-ploomy";
+    const botAuthor = {
+      name: `${appSlug}[bot]`,
+      email: `${this.appId}+${appSlug}[bot]@users.noreply.github.com`,
+    };
+
     const { data } = await octokit.rest.repos.createOrUpdateFileContents({
       owner,
       repo,
@@ -360,6 +368,8 @@ export class GitHubClient {
       content: encodedContent,
       branch,
       sha: existingSha,
+      author: botAuthor,
+      committer: botAuthor,
     });
 
     const commitSha = data.commit.sha ?? "unknown";
