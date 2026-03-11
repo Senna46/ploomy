@@ -13,12 +13,16 @@ import type { GitHubIssue, IssueComment } from "./types.js";
 export class GitHubClient {
   private app: App;
   private appId: number;
+  private appSlug: string;
+  private botUserId: number;
   private installationMap: Map<string, number>;
   private octokitCache: Map<number, Octokit>;
 
-  private constructor(app: App, appId: number) {
+  private constructor(app: App, appId: number, appSlug: string, botUserId: number) {
     this.app = app;
     this.appId = appId;
+    this.appSlug = appSlug;
+    this.botUserId = botUserId;
     this.installationMap = new Map();
     this.octokitCache = new Map();
   }
@@ -32,7 +36,27 @@ export class GitHubClient {
     privateKey: string
   ): Promise<GitHubClient> {
     const app = new App({ appId, privateKey });
-    const client = new GitHubClient(app, appId);
+
+    // Fetch the App's slug dynamically so commit attribution works for any App.
+    const { data: appData } = await app.octokit.request("GET /app");
+    const appSlug = appData.slug;
+
+    // Fetch the bot user ID (different from appId) for correct noreply email.
+    let botUserId = appId;
+    try {
+      const { data: botUser } = await app.octokit.request("GET /users/{username}", {
+        username: `${appSlug}[bot]`,
+      });
+      botUserId = botUser.id;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn(
+        `Failed to fetch bot user ID for "${appSlug}[bot]". Falling back to appId for commit email.`,
+        { error: message }
+      );
+    }
+
+    const client = new GitHubClient(app, appId, appSlug, botUserId);
     await client.loadInstallations();
     return client;
   }
@@ -354,10 +378,9 @@ export class GitHubClient {
 
     const encodedContent = Buffer.from(content, "utf-8").toString("base64");
 
-    const appSlug = "senna-ploomy";
     const botAuthor = {
-      name: `${appSlug}[bot]`,
-      email: `${this.appId}+${appSlug}[bot]@users.noreply.github.com`,
+      name: `${this.appSlug}[bot]`,
+      email: `${this.botUserId}+${this.appSlug}[bot]@users.noreply.github.com`,
     };
 
     const { data } = await octokit.rest.repos.createOrUpdateFileContents({
