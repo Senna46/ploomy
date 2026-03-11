@@ -93,8 +93,6 @@ class PloomyDaemon {
 
   private async verifyPrerequisites(): Promise<void> {
     const { execFile } = await import("child_process");
-    const { promisify } = await import("util");
-    const execFileAsync = promisify(execFile);
 
     const CLI_CHECK_TIMEOUT_MS = 10_000;
 
