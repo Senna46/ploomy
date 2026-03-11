@@ -12,15 +12,13 @@ import type { GitHubIssue, IssueComment } from "./types.js";
 
 export class GitHubClient {
   private app: App;
-  private appId: number;
   private appSlug: string;
   private botUserId: number;
   private installationMap: Map<string, number>;
   private octokitCache: Map<number, Octokit>;
 
-  private constructor(app: App, appId: number, appSlug: string, botUserId: number) {
+  private constructor(app: App, appSlug: string, botUserId: number) {
     this.app = app;
-    this.appId = appId;
     this.appSlug = appSlug;
     this.botUserId = botUserId;
     this.installationMap = new Map();
@@ -37,28 +35,50 @@ export class GitHubClient {
   ): Promise<GitHubClient> {
     const app = new App({ appId, privateKey });
 
-    // Fetch the App's slug dynamically so commit attribution works for any App.
-    const { data: appData } = await app.octokit.request("GET /app");
-    const appSlug = appData.slug;
+    const client = new GitHubClient(app, `app-${appId}`, 0);
+    await client.loadInstallations();
+    await client.resolveBotIdentity();
+    return client;
+  }
 
-    // Fetch the bot user ID (different from appId) for correct noreply email.
-    let botUserId = appId;
+  private async resolveBotIdentity(): Promise<void> {
+    const firstInstallationId = this.installationMap.values().next().value;
+    if (firstInstallationId === undefined) return;
+
+    const octokit = await this.getInstallationOctokit(firstInstallationId);
+
     try {
-      const { data: botUser } = await app.octokit.request("GET /users/{username}", {
-        username: `${appSlug}[bot]`,
-      });
-      botUserId = botUser.id;
+      const { data: appInfo } = await octokit.rest.apps.getAuthenticated();
+      this.appSlug = appInfo?.slug ?? this.appSlug;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.warn(
-        `Failed to fetch bot user ID for "${appSlug}[bot]". Falling back to appId for commit email.`,
-        { error: message }
-      );
+      logger.warn("Failed to fetch app slug, using fallback.", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
-    const client = new GitHubClient(app, appId, appSlug, botUserId);
-    await client.loadInstallations();
-    return client;
+    try {
+      const { data: botUser } = await octokit.rest.users.getByUsername({
+        username: `${this.appSlug}[bot]`,
+      });
+      this.botUserId = botUser.id;
+    } catch (error) {
+      logger.warn("Failed to fetch bot user ID, commits may not show app avatar.", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    logger.info("Bot identity resolved.", {
+      appSlug: this.appSlug,
+      botUserId: this.botUserId,
+    });
+  }
+
+  private async getInstallationOctokit(installationId: number): Promise<Octokit> {
+    const cached = this.octokitCache.get(installationId);
+    if (cached) return cached;
+    const octokit = await this.app.getInstallationOctokit(installationId);
+    this.octokitCache.set(installationId, octokit as Octokit);
+    return octokit as Octokit;
   }
 
   // ============================================================
@@ -103,15 +123,7 @@ export class GitHubClient {
 
   private async getOctokitForOwner(owner: string): Promise<Octokit> {
     const installationId = this.getInstallationId(owner);
-
-    const cached = this.octokitCache.get(installationId);
-    if (cached) {
-      return cached;
-    }
-
-    const octokit = await this.app.getInstallationOctokit(installationId);
-    this.octokitCache.set(installationId, octokit as Octokit);
-    return octokit as Octokit;
+    return this.getInstallationOctokit(installationId);
   }
 
   // ============================================================
