@@ -96,12 +96,34 @@ class PloomyDaemon {
     const { promisify } = await import("util");
     const execFileAsync = promisify(execFile);
 
+    const CLI_CHECK_TIMEOUT_MS = 10_000;
+
+    const execWithTimeout = (
+      cmd: string,
+      args: string[]
+    ): Promise<{ stdout: string; stderr: string }> => {
+      return new Promise((resolve, reject) => {
+        execFile(
+          cmd,
+          args,
+          { timeout: CLI_CHECK_TIMEOUT_MS },
+          (error, stdout, stderr) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve({ stdout, stderr });
+            }
+          }
+        );
+      });
+    };
+
     // Note: GitHub App credentials (appId, privateKey) are validated by
     // loadConfig() before the daemon is constructed, so no check is needed here.
 
     // Check Claude CLI
     try {
-      const { stdout } = await execFileAsync("claude", ["--version"]);
+      const { stdout } = await execWithTimeout("claude", ["--version"]);
       logger.debug("claude CLI version.", { version: stdout.trim() });
     } catch {
       throw new Error(
@@ -127,17 +149,19 @@ class PloomyDaemon {
 
     // Check Codex CLI
     try {
-      const { stdout } = await execFileAsync("codex", ["--version"]);
+      const { stdout } = await execWithTimeout("codex", ["--version"]);
       logger.debug("codex CLI version.", { version: stdout.trim() });
-    } catch {
-      throw new Error(
-        "codex CLI is not available. Install with: npm install -g @openai/codex"
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.warn(
+        "Codex CLI check failed. Plan review features may not work.",
+        { error: msg }
       );
     }
 
     // Check git
     try {
-      await execFileAsync("git", ["--version"]);
+      await execWithTimeout("git", ["--version"]);
     } catch {
       throw new Error("git is not available. Install git first.");
     }
